@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" >
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" >
+        <TextView
+            android:id="@+id/current"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="current"
+            />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+            <Button
+                android:id="@+id/btnroot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="mOnClick"
+                android:text="Root" />
+            <Button
+                android:id="@+id/btnup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="mOnClick"
+                android:text="Up" />
+        </LinearLayout>
+    </LinearLayout>
+    <ListView
+        android:id="@+id/filelist"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        />
+</LinearLayout>
