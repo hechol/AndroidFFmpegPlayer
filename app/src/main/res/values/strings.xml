@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">DVideoPlayer</string>
+    <string name="title_activity_play_video">PlayVideo</string>
+</resources>

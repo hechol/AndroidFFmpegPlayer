@@ -14,25 +14,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <android/bitmap.h>
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
+#include <SLES/OpenSLES.h>
+#include <SLES/OpenSLES_Android.h>
+
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
-#include "test.h"
+#include "libswresample/swresample.h"
 
 // return: == 0 - success
 //          < 0 - error code
-int openMovie(const char filePath[]);
 
-// return: == 0 - success
-//         != 0 then end of movie or fail
-int decodeFrame();
-
+int openMovie(ANativeWindow* nativeWindow, const char filePath[]);
+int decodeFrame(ANativeWindow* nativeWindow);
 void copyPixels(uint8_t *pixels);
-
 int getWidth();
 int getHeight();
-
 void closeMovie();
 
+void createEngine();
+void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample);
+void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
+void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 
 #endif

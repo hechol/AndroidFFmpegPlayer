@@ -24,6 +24,10 @@ add_library(swscale SHARED IMPORTED)
 set_target_properties(swscale PROPERTIES IMPORTED_LOCATION
         ${ffmpeg_DIR}/${ANDROID_ABI}/libswscale-2.so)
 
+add_library(swresample SHARED IMPORTED)
+set_target_properties(swresample PROPERTIES IMPORTED_LOCATION
+        ${ffmpeg_DIR}/${ANDROID_ABI}/libswresample-0.so)
+
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
@@ -62,8 +66,10 @@ target_link_libraries( # Specifies the target library.
                        avformat
                        avcodec
                        swscale
+                       swresample
                        android
                        jnigraphics
+                       OpenSLES
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib} )

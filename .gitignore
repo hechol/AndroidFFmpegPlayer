@@ -1,2 +1,8 @@
 
-strings.xml
+.gradle
+app/build
+.idea
+app/.externalNativeBuild
+AndroidFFmpegPlayer.iml
+app/app.iml
+local.properties
