@@ -62,12 +62,49 @@ uint8_t *gVideoBuffer = NULL;
 uint8_t *audioOutputBuffer = NULL;
 int audio_data_size = 0;
 
+
+
+VideoState      *is;
+
+
+void createEngine()
+{
+    is = av_mallocz(sizeof(VideoState));
+
+    SLresult result;
+
+    // create engine
+    result = slCreateEngine(&engineObject, 0, NULL, 0, NULL, NULL);
+
+    // realize the engine
+    result = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
+
+    // get the engine interface, which is needed in order to create other objects
+    result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
+
+    // create output mix, with environmental reverb specified as a non-required interface
+    const SLInterfaceID ids[1] = {SL_IID_ENVIRONMENTALREVERB};
+    const SLboolean req[1] = {SL_BOOLEAN_FALSE};
+    result = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, 0, 0);
+
+    // realize the output mix
+    result = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);
+
+    // get the environmental reverb interface
+    // this could fail if the environmental reverb effect is not available,
+    // either because the feature is not present, excessive CPU load, or
+    // the required MODIFY_AUDIO_SETTINGS permission was not requested and granted
+    result = (*outputMixObject)->GetInterface(outputMixObject, SL_IID_ENVIRONMENTALREVERB,
+                                              &outputMixEnvironmentalReverb);
+    if (SL_RESULT_SUCCESS == result) {
+        result = (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
+                outputMixEnvironmentalReverb, &reverbSettings);
+    }
+}
+
 int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 {
-    int i;
-
-    if (gFormatCtx != NULL)
-        return -1;
+    createEngine();
 
     gFormatCtx = avformat_alloc_context();
 
@@ -77,6 +114,7 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     if (avformat_find_stream_info(gFormatCtx, 0) < 0)
         return -3;
 
+    int i;
     for (i = 0; i < gFormatCtx->nb_streams; i++) {
         if (gFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
             gVideoStreamIdx = i;
@@ -90,6 +128,8 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 
     gVideoCodecCtx = gFormatCtx->streams[gVideoStreamIdx]->codec;
     gAudioCodecCtx = gFormatCtx->streams[gAudioStreamIdx]->codec;
+
+    is->video_st = gFormatCtx->streams[gVideoStreamIdx];
 
     gVideoCodec = avcodec_find_decoder(gVideoCodecCtx->codec_id);
     if (gVideoCodec == NULL)
@@ -131,7 +171,7 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     int channel = gAudioCodecCtx->channels;
 
     audioFrame = avcodec_alloc_frame();
-    createEngine();
+
     createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
     //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
 
@@ -153,72 +193,100 @@ int decodeFrame(ANativeWindow* nativeWindow)
     static AVFrame audioFrame;
     ANativeWindow_Buffer windowBuffer;
 
-    while (av_read_frame(gFormatCtx, &packet) >= 0) {
-        if (packet.stream_index == gVideoStreamIdx) {
-            avcodec_decode_video2(gVideoCodecCtx, gFrame, &frameFinished, &packet);
+    for(;;){
 
-            if (frameFinished) {
-                gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
-                                                      gVideoCodecCtx->width, gVideoCodecCtx->height, gVideoCodecCtx->pix_fmt,
-                                                      gVideoCodecCtx->width, gVideoCodecCtx->height, PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL, NULL);
+        if(is->seek_req) {
+            int stream_index= -1;
+            int64_t seek_target = is->seek_pos;
 
-                sws_scale(gImgConvertCtx, gFrame->data, gFrame->linesize, 0, gVideoCodecCtx->height, gFrameRGB->data, gFrameRGB->linesize);
+            if     (gVideoStreamIdx >= 0) stream_index = gVideoStreamIdx;
+            else if(gAudioStreamIdx >= 0) stream_index = gAudioStreamIdx;
 
-                ANativeWindow_lock(nativeWindow, &windowBuffer, 0);
-
-                uint8_t * dst = windowBuffer.bits;
-                int dstStride = windowBuffer.stride * 4;
-                uint8_t * src = (uint8_t*) (gFrameRGB->data[0]);
-                int srcStride = gFrameRGB->linesize[0];
-
-                int h;
-                for (h = 0; h < gVideoCodecCtx->height; h++) {
-                    memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-                }
-
-                ANativeWindow_unlockAndPost(nativeWindow);
-
-                av_free_packet(&packet);
-
-                usleep(11000);
-
-                return 0;
+            if(stream_index>=0){
+                seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
+                                          gFormatCtx->streams[stream_index]->time_base);
             }
-        }else if(packet.stream_index == gAudioStreamIdx){
-            avcodec_decode_audio4(gAudioCodecCtx, &audioFrame, &frameFinished, &packet);
-            if (frameFinished) {
-                audio_data_size = av_samples_get_buffer_size(
-                        audioFrame.linesize, gAudioCodecCtx->channels,
-                        audioFrame.nb_samples, gAudioCodecCtx->sample_fmt, 1);
-
-                if (audio_data_size > outputBufferSize) {
-                    audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
-                                                       sizeof(uint8_t) * outputBufferSize);
-                }
-
-                swr_convert(swr, &audioOutputBuffer, audioFrame.nb_samples,
-                            (uint8_t const **) (audioFrame.extended_data),
-                            audioFrame.nb_samples);
-
-                if (NULL != audioOutputBuffer && 0 != audio_data_size) {
-
-                    SLresult result;
-                    // enqueue another buffer
-                    result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
-                                                             audio_data_size);
-                    // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
-                    // which for this code example would indicate a programming error
-                    (void)result;
-                }
-
-                av_free_packet(&packet);
-                return 0;
-            }else{
-                av_free_packet(&packet);
+            if(av_seek_frame(gFormatCtx, stream_index,
+                             seek_target, is->seek_flags) < 0) {
+                fprintf(stderr, "%s: error while seeking\n",
+                        gFormatCtx->filename);
             }
+            is->seek_req = 0;
         }
 
+        if(av_read_frame(gFormatCtx, &packet) >= 0) {
+            if (packet.stream_index == gVideoStreamIdx) {
+                avcodec_decode_video2(gVideoCodecCtx, gFrame, &frameFinished, &packet);
 
+                double pts;
+                if ((pts = av_frame_get_best_effort_timestamp(gFrame)) == AV_NOPTS_VALUE) {
+                    pts = 0;
+                }
+                pts *= av_q2d(is->video_st->time_base);
+                is->video_current_pts = pts;
+                is->video_current_pts_time = av_gettime();
+
+                if (frameFinished) {
+                    gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
+                                                          gVideoCodecCtx->width, gVideoCodecCtx->height, gVideoCodecCtx->pix_fmt,
+                                                          gVideoCodecCtx->width, gVideoCodecCtx->height, PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL, NULL);
+
+                    sws_scale(gImgConvertCtx, gFrame->data, gFrame->linesize, 0, gVideoCodecCtx->height, gFrameRGB->data, gFrameRGB->linesize);
+
+                    ANativeWindow_lock(nativeWindow, &windowBuffer, 0);
+
+                    uint8_t * dst = windowBuffer.bits;
+                    int dstStride = windowBuffer.stride * 4;
+                    uint8_t * src = (uint8_t*) (gFrameRGB->data[0]);
+                    int srcStride = gFrameRGB->linesize[0];
+
+                    int h;
+                    for (h = 0; h < gVideoCodecCtx->height; h++) {
+                        memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+                    }
+
+                    ANativeWindow_unlockAndPost(nativeWindow);
+
+                    av_free_packet(&packet);
+
+                    usleep(11000);
+
+                    return 0;
+                }
+            }else if(packet.stream_index == gAudioStreamIdx){
+                avcodec_decode_audio4(gAudioCodecCtx, &audioFrame, &frameFinished, &packet);
+                if (frameFinished) {
+                    audio_data_size = av_samples_get_buffer_size(
+                            audioFrame.linesize, gAudioCodecCtx->channels,
+                            audioFrame.nb_samples, gAudioCodecCtx->sample_fmt, 1);
+
+                    if (audio_data_size > outputBufferSize) {
+                        audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
+                                                           sizeof(uint8_t) * outputBufferSize);
+                    }
+
+                    swr_convert(swr, &audioOutputBuffer, audioFrame.nb_samples,
+                                (uint8_t const **) (audioFrame.extended_data),
+                                audioFrame.nb_samples);
+
+                    if (NULL != audioOutputBuffer && 0 != audio_data_size) {
+
+                        SLresult result;
+                        // enqueue another buffer
+                        result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
+                                                                 audio_data_size);
+                        // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
+                        // which for this code example would indicate a programming error
+                        (void)result;
+                    }
+
+                    av_free_packet(&packet);
+                    return 0;
+                }else{
+                    av_free_packet(&packet);
+                }
+            }
+        }
     }
 
     return -1;
@@ -363,38 +431,6 @@ void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
     return;
 }
 
-void createEngine()
-{
-    SLresult result;
-
-    // create engine
-    result = slCreateEngine(&engineObject, 0, NULL, 0, NULL, NULL);
-
-    // realize the engine
-    result = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
-
-    // get the engine interface, which is needed in order to create other objects
-    result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
-
-    // create output mix, with environmental reverb specified as a non-required interface
-    const SLInterfaceID ids[1] = {SL_IID_ENVIRONMENTALREVERB};
-    const SLboolean req[1] = {SL_BOOLEAN_FALSE};
-    result = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, 0, 0);
-
-    // realize the output mix
-    result = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);
-
-    // get the environmental reverb interface
-    // this could fail if the environmental reverb effect is not available,
-    // either because the feature is not present, excessive CPU load, or
-    // the required MODIFY_AUDIO_SETTINGS permission was not requested and granted
-    result = (*outputMixObject)->GetInterface(outputMixObject, SL_IID_ENVIRONMENTALREVERB,
-                                              &outputMixEnvironmentalReverb);
-    if (SL_RESULT_SUCCESS == result) {
-        result = (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
-                outputMixEnvironmentalReverb, &reverbSettings);
-    }
-}
 
 // create buffer queue audio player
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample)
@@ -468,6 +504,29 @@ void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample)
     (void)result;
 
     return;
+}
+
+double get_video_clock(VideoState *is) {
+    double delta;
+
+    delta = (av_gettime() - is->video_current_pts_time) / 1000000.0;
+    return is->video_current_pts + delta;
+}
+
+double get_master_clock(VideoState *is) {
+     return get_video_clock(is);
+}
+
+void stream_seek(double rel) {
+    double pos = get_master_clock(is);
+    pos += rel;
+    pos = (int64_t)(pos * AV_TIME_BASE);
+
+    if(!is->seek_req) {
+        is->seek_pos = pos;
+        is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
+        is->seek_req = 1;
+    }
 }
 
 

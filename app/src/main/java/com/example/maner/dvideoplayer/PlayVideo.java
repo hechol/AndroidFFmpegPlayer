@@ -56,6 +56,17 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         }).start();
     }
 
+    public void mOnClick(View v) {
+        switch (v.getId()) {
+            case R.id.left:
+                StreamSeek(-10);
+                break;
+            case R.id.right:
+                StreamSeek(10);
+                break;
+        }
+    }
+
     @Override
     public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
 
@@ -72,6 +83,7 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
     public static native int getMovieWidth();
     public static native int getMovieHeight();
     public static native void closeMovie();
+    public static native void StreamSeek(double incr);
 }
 
 /*

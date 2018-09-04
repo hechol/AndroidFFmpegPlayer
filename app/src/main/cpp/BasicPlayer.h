@@ -28,6 +28,17 @@
 // return: == 0 - success
 //          < 0 - error code
 
+typedef struct VideoState {
+    double          video_current_pts;
+    int64_t         video_current_pts_time;
+
+    AVStream        *video_st;
+
+    int             seek_req;
+    int             seek_flags;
+    int64_t         seek_pos;
+} VideoState;
+
 int openMovie(ANativeWindow* nativeWindow, const char filePath[]);
 int decodeFrame(ANativeWindow* nativeWindow);
 void copyPixels(uint8_t *pixels);
@@ -39,5 +50,7 @@ void createEngine();
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample);
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
+double get_master_clock(VideoState *is);
+void stream_seek(double rel);
 
 #endif

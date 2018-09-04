@@ -79,3 +79,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
 {
     closeMovie();
 }
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_StreamSeek(JNIEnv *env, jobject thiz, jdouble incr)
+{
+    stream_seek( incr);
+}
