@@ -42,7 +42,7 @@ static const SLEnvironmentalReverbSettings reverbSettings =
 static void *buffer;
 static size_t bufferSize;
 
-AVFormatContext *gFormatCtx = NULL;
+//AVFormatContext *gFormatCtx = NULL;
 
 AVCodecContext *gVideoCodecCtx = NULL;
 AVCodecContext *gAudioCodecCtx = NULL;
@@ -106,30 +106,35 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 {
     createEngine();
 
-    gFormatCtx = avformat_alloc_context();
+    AVFormatContext *ic = avformat_alloc_context();
 
-    if (avformat_open_input(&gFormatCtx, filePath, NULL, NULL) != 0)
+    if (avformat_open_input(&ic, filePath, NULL, NULL) != 0)
         return -2;
 
-    if (avformat_find_stream_info(gFormatCtx, 0) < 0)
+    is->ic = ic;
+
+    if (avformat_find_stream_info(ic, 0) < 0)
         return -3;
 
     int i;
-    for (i = 0; i < gFormatCtx->nb_streams; i++) {
-        if (gFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+    for (i = 0; i < ic->nb_streams; i++) {
+        AVCodecContext *enc = ic->streams[i]->codec;
+        //ic->streams[i]->discard = AVDISCARD_ALL;
+
+        if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
             gVideoStreamIdx = i;
         }
-        if (gFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+        if (enc->codec_type == AVMEDIA_TYPE_AUDIO) {
             gAudioStreamIdx = i;
         }
     }
     if (gVideoStreamIdx == -1)
         return -4;
 
-    gVideoCodecCtx = gFormatCtx->streams[gVideoStreamIdx]->codec;
-    gAudioCodecCtx = gFormatCtx->streams[gAudioStreamIdx]->codec;
+    gVideoCodecCtx = ic->streams[gVideoStreamIdx]->codec;
+    gAudioCodecCtx = ic->streams[gAudioStreamIdx]->codec;
 
-    is->video_st = gFormatCtx->streams[gVideoStreamIdx];
+    is->video_st = ic->streams[gVideoStreamIdx];
 
     gVideoCodec = avcodec_find_decoder(gVideoCodecCtx->codec_id);
     if (gVideoCodec == NULL)
@@ -204,17 +209,17 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
             if(stream_index>=0){
                 seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
-                                          gFormatCtx->streams[stream_index]->time_base);
+                                          is->ic->streams[stream_index]->time_base);
             }
-            if(av_seek_frame(gFormatCtx, stream_index,
+            if(av_seek_frame(is->ic, stream_index,
                              seek_target, is->seek_flags) < 0) {
                 fprintf(stderr, "%s: error while seeking\n",
-                        gFormatCtx->filename);
+                        is->ic->filename);
             }
             is->seek_req = 0;
         }
 
-        if(av_read_frame(gFormatCtx, &packet) >= 0) {
+        if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == gVideoStreamIdx) {
                 avcodec_decode_video2(gVideoCodecCtx, gFrame, &frameFinished, &packet);
 
@@ -325,9 +330,9 @@ void closeMovie()
         gVideoCodecCtx = NULL;
     }
 
-    if (gFormatCtx != NULL) {
+    if (is->ic != NULL) {
         //av_close_input_file(gFormatCtx);
-        gFormatCtx = NULL;
+        is->ic = NULL;
     }
     return;
 }
@@ -346,7 +351,7 @@ void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 
     int frameFinished = 0;
 
-    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
+    while (av_read_frame(is->ic, &audioPacket) >= 0) {
         if(audioPacket.stream_index == gAudioStreamIdx){
             avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
             if (frameFinished) {
@@ -395,7 +400,7 @@ void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 
     int frameFinished = 0;
 
-    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
+    while (av_read_frame(is->ic, &audioPacket) >= 0) {
         if(audioPacket.stream_index == gAudioStreamIdx){
             avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
             if (frameFinished) {

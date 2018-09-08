@@ -29,10 +29,15 @@
 //          < 0 - error code
 
 typedef struct VideoState {
+    AVFormatContext *ic;
+    int video_stream;
+    int audio_stream;
+
     double          video_current_pts;
     int64_t         video_current_pts_time;
 
     AVStream        *video_st;
+    AVStream        *audio_st;
 
     int             seek_req;
     int             seek_flags;
