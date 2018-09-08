@@ -44,12 +44,12 @@ static size_t bufferSize;
 
 //AVFormatContext *gFormatCtx = NULL;
 
-AVCodecContext *gVideoCodecCtx = NULL;
-AVCodecContext *gAudioCodecCtx = NULL;
-AVCodec *gVideoCodec = NULL;
-AVCodec *gAudioCodec = NULL;
-int gVideoStreamIdx = -1;
-int gAudioStreamIdx = -1;
+//AVCodecContext *gVideoCodecCtx = NULL;
+//AVCodecContext *gAudioCodecCtx = NULL;
+//AVCodec *gVideoCodec = NULL;
+//AVCodec *gAudioCodec = NULL;
+//int gVideoStreamIdx = -1;
+//int gAudioStreamIdx = -1;
 
 AVFrame *gFrame = NULL;
 AVFrame *gFrameRGB = NULL;
@@ -106,6 +106,8 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 {
     createEngine();
 
+    int video_index, audio_index;
+
     AVFormatContext *ic = avformat_alloc_context();
 
     if (avformat_open_input(&ic, filePath, NULL, NULL) != 0)
@@ -119,75 +121,88 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     int i;
     for (i = 0; i < ic->nb_streams; i++) {
         AVCodecContext *enc = ic->streams[i]->codec;
-        //ic->streams[i]->discard = AVDISCARD_ALL;
 
         if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
-            gVideoStreamIdx = i;
+            video_index = i;
         }
         if (enc->codec_type == AVMEDIA_TYPE_AUDIO) {
-            gAudioStreamIdx = i;
+            audio_index = i;
         }
     }
-    if (gVideoStreamIdx == -1)
-        return -4;
 
-    gVideoCodecCtx = ic->streams[gVideoStreamIdx]->codec;
-    gAudioCodecCtx = ic->streams[gAudioStreamIdx]->codec;
+    if (audio_index >= 0) {
+        stream_component_open(is, audio_index, NULL);
+    }
 
-    is->video_st = ic->streams[gVideoStreamIdx];
-
-    gVideoCodec = avcodec_find_decoder(gVideoCodecCtx->codec_id);
-    if (gVideoCodec == NULL)
-        return -5;
-    gAudioCodec = avcodec_find_decoder(gAudioCodecCtx->codec_id);
-    if (gAudioCodec == NULL)
-        return -5;
-
-    if (avcodec_open2(gVideoCodecCtx, gVideoCodec, NULL) < 0)
-        return -6;
-    if (avcodec_open2(gAudioCodecCtx, gAudioCodec, NULL) < 0)
-        return -6;
-
-    gFrame = avcodec_alloc_frame();
-    if (gFrame == NULL)
-        return -7;
-
-    gFrameRGB = avcodec_alloc_frame();
-    if (gFrameRGB == NULL)
-        return -8;
-
-    // video init
-
-    gPictureSize = avpicture_get_size(PIX_FMT_RGBA, gVideoCodecCtx->width, gVideoCodecCtx->height);
-    gVideoBuffer = (uint8_t*)(malloc(sizeof(uint8_t) * gPictureSize));
-    avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, PIX_FMT_RGBA, gVideoCodecCtx->width, gVideoCodecCtx->height);
-
-    // audio init
-    swr = swr_alloc_set_opts(NULL,
-                             gAudioCodecCtx->channel_layout, AV_SAMPLE_FMT_S16, gAudioCodecCtx->sample_rate,
-                             gAudioCodecCtx->channel_layout, gAudioCodecCtx->sample_fmt, gAudioCodecCtx->sample_rate,
-                             0, NULL);
-    swr_init(swr);
-
-    outputBufferSize = 8196;
-    audioOutputBuffer = (uint8_t *) malloc(sizeof(uint8_t) * outputBufferSize);
-
-    int rate = gAudioCodecCtx->sample_rate;
-    int channel = gAudioCodecCtx->channels;
-
-    audioFrame = avcodec_alloc_frame();
-
-    createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
-    //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
-
-    ANativeWindow_setBuffersGeometry(nativeWindow,  gVideoCodecCtx->width, gVideoCodecCtx->height, WINDOW_FORMAT_RGBA_8888);
-    ANativeWindow_Buffer windowBuffer;
+    if (video_index >= 0) {
+        stream_component_open(is, video_index, nativeWindow);
+    }
 
     for(;;){
         decodeFrame(nativeWindow);
     }
 
     return 0;
+}
+
+int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow)
+{
+    AVFormatContext *ic = is->ic;
+    AVCodecContext *enc;
+    AVCodec *codec;
+
+    enc = ic->streams[stream_index]->codec;
+    codec = avcodec_find_decoder(enc->codec_id);
+    if (avcodec_open2(enc, codec, NULL) < 0)
+        return -1;
+
+    switch(enc->codec_type) {
+        case AVMEDIA_TYPE_VIDEO:
+            is->video_stream = stream_index;
+            is->video_st = ic->streams[stream_index];
+
+            gFrame = avcodec_alloc_frame();
+            if (gFrame == NULL)
+                return -7;
+
+            gFrameRGB = avcodec_alloc_frame();
+            if (gFrameRGB == NULL)
+                return -8;
+
+            // video init
+
+            gPictureSize = avpicture_get_size(PIX_FMT_RGBA, enc->width, enc->height);
+            gVideoBuffer = (uint8_t*)(malloc(sizeof(uint8_t) * gPictureSize));
+            avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, PIX_FMT_RGBA, enc->width, enc->height);
+
+            ANativeWindow_setBuffersGeometry(nativeWindow,  enc->width, enc->height, WINDOW_FORMAT_RGBA_8888);
+            ANativeWindow_Buffer windowBuffer;
+            break;
+        case AVMEDIA_TYPE_AUDIO:
+            is->audio_stream = stream_index;
+            is->audio_st = ic->streams[stream_index];
+
+            // audio init
+            swr = swr_alloc_set_opts(NULL,
+                                     enc->channel_layout, AV_SAMPLE_FMT_S16, enc->sample_rate,
+                                     enc->channel_layout, enc->sample_fmt, enc->sample_rate,
+                                     0, NULL);
+            swr_init(swr);
+
+            outputBufferSize = 8196;
+            audioOutputBuffer = (uint8_t *) malloc(sizeof(uint8_t) * outputBufferSize);
+
+            int rate = enc->sample_rate;
+            int channel = enc->channels;
+
+            audioFrame = avcodec_alloc_frame();
+
+            createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
+            //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
+            break;
+        default:
+            break;
+    }
 }
 
 int decodeFrame(ANativeWindow* nativeWindow)
@@ -204,8 +219,7 @@ int decodeFrame(ANativeWindow* nativeWindow)
             int stream_index= -1;
             int64_t seek_target = is->seek_pos;
 
-            if     (gVideoStreamIdx >= 0) stream_index = gVideoStreamIdx;
-            else if(gAudioStreamIdx >= 0) stream_index = gAudioStreamIdx;
+            stream_index = is->video_stream;
 
             if(stream_index>=0){
                 seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
@@ -220,8 +234,8 @@ int decodeFrame(ANativeWindow* nativeWindow)
         }
 
         if(av_read_frame(is->ic, &packet) >= 0) {
-            if (packet.stream_index == gVideoStreamIdx) {
-                avcodec_decode_video2(gVideoCodecCtx, gFrame, &frameFinished, &packet);
+            if (packet.stream_index == is->video_stream) {
+                avcodec_decode_video2(is->video_st->codec, gFrame, &frameFinished, &packet);
 
                 double pts;
                 if ((pts = av_frame_get_best_effort_timestamp(gFrame)) == AV_NOPTS_VALUE) {
@@ -233,10 +247,10 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
                 if (frameFinished) {
                     gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
-                                                          gVideoCodecCtx->width, gVideoCodecCtx->height, gVideoCodecCtx->pix_fmt,
-                                                          gVideoCodecCtx->width, gVideoCodecCtx->height, PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL, NULL);
+                                                          is->video_st->codec->width, is->video_st->codec->height, is->video_st->codec->pix_fmt,
+                                                          is->video_st->codec->width, is->video_st->codec->height, PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL, NULL);
 
-                    sws_scale(gImgConvertCtx, gFrame->data, gFrame->linesize, 0, gVideoCodecCtx->height, gFrameRGB->data, gFrameRGB->linesize);
+                    sws_scale(gImgConvertCtx, gFrame->data, gFrame->linesize, 0, is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
 
                     ANativeWindow_lock(nativeWindow, &windowBuffer, 0);
 
@@ -246,7 +260,7 @@ int decodeFrame(ANativeWindow* nativeWindow)
                     int srcStride = gFrameRGB->linesize[0];
 
                     int h;
-                    for (h = 0; h < gVideoCodecCtx->height; h++) {
+                    for (h = 0; h < is->video_st->codec->height; h++) {
                         memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
                     }
 
@@ -254,20 +268,20 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
                     av_free_packet(&packet);
 
-                    usleep(11000);
+                    //usleep(11000);
 
                     return 0;
                 }
-            }else if(packet.stream_index == gAudioStreamIdx){
-                avcodec_decode_audio4(gAudioCodecCtx, &audioFrame, &frameFinished, &packet);
+            }else if(packet.stream_index == is->audio_stream){
+                avcodec_decode_audio4(is->audio_st->codec, &audioFrame, &frameFinished, &packet);
                 if (frameFinished) {
                     audio_data_size = av_samples_get_buffer_size(
-                            audioFrame.linesize, gAudioCodecCtx->channels,
-                            audioFrame.nb_samples, gAudioCodecCtx->sample_fmt, 1);
+                            audioFrame.linesize, is->audio_st->codec->channels,
+                            audioFrame.nb_samples, is->audio_st->codec->sample_fmt, 1);
 
                     if (audio_data_size > outputBufferSize) {
                         audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
-                                                           sizeof(uint8_t) * outputBufferSize);
+                                                                sizeof(uint8_t) * outputBufferSize);
                     }
 
                     swr_convert(swr, &audioOutputBuffer, audioFrame.nb_samples,
@@ -291,6 +305,8 @@ int decodeFrame(ANativeWindow* nativeWindow)
                     av_free_packet(&packet);
                 }
             }
+        }else{
+            printf("abc");
         }
     }
 
@@ -305,12 +321,12 @@ void copyPixels(uint8_t *pixels)
 
 int getWidth()
 {
-    return gVideoCodecCtx->width;
+    return is->video_st->codec->width;
 }
 
 int getHeight()
 {
-    return gVideoCodecCtx->height;
+    return is->video_st->codec->height;
 }
 
 void closeMovie()
@@ -325,9 +341,9 @@ void closeMovie()
     if (gFrameRGB != NULL)
         av_freep(gFrameRGB);
 
-    if (gVideoCodecCtx != NULL) {
-        avcodec_close(gVideoCodecCtx);
-        gVideoCodecCtx = NULL;
+    if (is->video_st->codec != NULL) {
+        avcodec_close(is->video_st->codec);
+        is->video_st->codec = NULL;
     }
 
     if (is->ic != NULL) {
@@ -343,7 +359,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
     return;
 }
 
-
+/*
 // this callback handler is called every time a buffer finishes playing
 void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
@@ -351,7 +367,7 @@ void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 
     int frameFinished = 0;
 
-    while (av_read_frame(is->ic, &audioPacket) >= 0) {
+    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
         if(audioPacket.stream_index == gAudioStreamIdx){
             avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
             if (frameFinished) {
@@ -392,7 +408,9 @@ void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
     }
     return;
 }
+*/
 
+/*
 // this callback handler is called every time a buffer finishes playing
 void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
@@ -400,7 +418,7 @@ void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 
     int frameFinished = 0;
 
-    while (av_read_frame(is->ic, &audioPacket) >= 0) {
+    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
         if(audioPacket.stream_index == gAudioStreamIdx){
             avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
             if (frameFinished) {
@@ -435,7 +453,7 @@ void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
     }
     return;
 }
-
+*/
 
 // create buffer queue audio player
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample)
@@ -519,7 +537,7 @@ double get_video_clock(VideoState *is) {
 }
 
 double get_master_clock(VideoState *is) {
-     return get_video_clock(is);
+    return get_video_clock(is);
 }
 
 void stream_seek(double rel) {
