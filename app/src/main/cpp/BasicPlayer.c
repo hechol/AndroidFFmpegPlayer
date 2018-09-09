@@ -66,28 +66,20 @@ int audio_data_size = 0;
 
 VideoState      *is;
 
-typedef struct PacketQueue {
-    AVPacketList *first_pkt, *last_pkt;
-    int nb_packets;
-    int size;
-    int abort_request;
-    pthread_mutex_t *mutex;
-    pthread_cond_t *cond;
-} PacketQueue;
 
 /* packet queue handling */
 void packet_queue_init(PacketQueue *q)
 {
     memset(q, 0, sizeof(PacketQueue));
-    pthread_mutex_init(q->mutex, NULL);
-    pthread_cond_init(q->cond, NULL);
+    pthread_mutex_init(&q->mutex, NULL);
+    pthread_cond_init(&q->cond, NULL);
 }
 
 void packet_queue_flush(PacketQueue *q)
 {
     AVPacketList *pkt, *pkt1;
 
-    pthread_mutex_lock(q->mutex);
+    pthread_mutex_lock(&q->mutex);
     for(pkt = q->first_pkt; pkt != NULL; pkt = pkt1) {
         pkt1 = pkt->next;
         av_free_packet(&pkt->pkt);
@@ -97,7 +89,7 @@ void packet_queue_flush(PacketQueue *q)
     q->first_pkt = NULL;
     q->nb_packets = 0;
     q->size = 0;
-    pthread_mutex_unlock(q->mutex);
+    pthread_mutex_unlock(&q->mutex);
 }
 
 int packet_queue_put(PacketQueue *q, AVPacket *pkt)
@@ -114,7 +106,7 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     pkt1->pkt = *pkt;
     pkt1->next = NULL;
 
-    pthread_mutex_lock(q->mutex);
+    pthread_mutex_lock(&q->mutex);
 
     if (!q->last_pkt)
 
@@ -125,9 +117,9 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     q->nb_packets++;
     q->size += pkt1->pkt.size + sizeof(*pkt1);
     /* XXX: should duplicate packet data in DV case */
-    pthread_cond_signal(q->cond);
+    pthread_cond_signal(&q->cond);
 
-    pthread_mutex_unlock(q->mutex);
+    pthread_mutex_unlock(&q->mutex);
     return 0;
 }
 
@@ -137,7 +129,7 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
     AVPacketList *pkt1;
     int ret;
 
-    pthread_mutex_lock(q->mutex);
+    pthread_mutex_lock(&q->mutex);
 
     for(;;) {
         if (q->abort_request) {
@@ -160,10 +152,10 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
             ret = 0;
             break;
         } else {
-            pthread_cond_wait(q->cond, q->mutex);
+            pthread_cond_wait(&q->cond, &q->mutex);
         }
     }
-    pthread_mutex_unlock(q->mutex);
+    pthread_mutex_unlock(&q->mutex);
     return ret;
 }
 
@@ -207,8 +199,6 @@ void createEngine()
 
 int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 {
-
-
     createEngine();
 
     int video_index, audio_index;
@@ -218,6 +208,7 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     if (avformat_open_input(&ic, filePath, NULL, NULL) != 0)
         return -2;
 
+    is->nativeWindow = nativeWindow;
     is->ic = ic;
 
     if (avformat_find_stream_info(ic, 0) < 0)
@@ -252,6 +243,61 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     return 0;
 }
 
+int video_thread(void *arg)
+{
+    AVPacket *pkt;
+    int got_picture = 0;
+    ANativeWindow_Buffer windowBuffer;
+    AVFrame *frame= avcodec_alloc_frame();
+
+    for(;;) {
+
+        if (packet_queue_get(&is->videoq, pkt, 1) < 0)
+            break;
+
+        avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
+
+        double pts;
+        if ((pts = av_frame_get_best_effort_timestamp(frame)) == AV_NOPTS_VALUE) {
+            pts = 0;
+        }
+        pts *= av_q2d(is->video_st->time_base);
+        is->video_current_pts = pts;
+        is->video_current_pts_time = av_gettime();
+
+        if (got_picture) {
+            gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
+                                                  is->video_st->codec->width,
+                                                  is->video_st->codec->height,
+                                                  is->video_st->codec->pix_fmt,
+                                                  is->video_st->codec->width,
+                                                  is->video_st->codec->height, PIX_FMT_RGBA,
+                                                  SWS_BICUBIC, NULL, NULL, NULL);
+
+            sws_scale(gImgConvertCtx, frame->data, frame->linesize, 0,
+                      is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
+
+            ANativeWindow_lock(is->nativeWindow, &windowBuffer, 0);
+
+            uint8_t *dst = windowBuffer.bits;
+            int dstStride = windowBuffer.stride * 4;
+            uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+            int srcStride = gFrameRGB->linesize[0];
+
+            int h;
+            for (h = 0; h < is->video_st->codec->height; h++) {
+                memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+            }
+
+            ANativeWindow_unlockAndPost(is->nativeWindow);
+
+            av_free_packet(pkt);
+
+            //usleep(11000);
+        }
+    }
+}
+
 int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow)
 {
     AVFormatContext *ic = is->ic;
@@ -267,6 +313,8 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
         case AVMEDIA_TYPE_VIDEO:
             is->video_stream = stream_index;
             is->video_st = ic->streams[stream_index];
+
+            packet_queue_init(&is->videoq);
 
             gFrame = avcodec_alloc_frame();
             if (gFrame == NULL)
@@ -284,6 +332,8 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
             ANativeWindow_setBuffersGeometry(nativeWindow,  enc->width, enc->height, WINDOW_FORMAT_RGBA_8888);
             ANativeWindow_Buffer windowBuffer;
+
+            pthread_create(&is->video_tid, NULL, video_thread, NULL);
             break;
         case AVMEDIA_TYPE_AUDIO:
             is->audio_stream = stream_index;
@@ -342,6 +392,10 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
         if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
+
+                packet_queue_put(&is->videoq, &packet);
+
+                /*
                 avcodec_decode_video2(is->video_st->codec, gFrame, &frameFinished, &packet);
 
                 double pts;
@@ -379,6 +433,9 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
                     return 0;
                 }
+                 */
+                return 0;
+
             }else if(packet.stream_index == is->audio_stream){
                 avcodec_decode_audio4(is->audio_st->codec, &audioFrame, &frameFinished, &packet);
                 if (frameFinished) {

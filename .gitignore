@@ -6,3 +6,4 @@ app/.externalNativeBuild
 AndroidFFmpegPlayer.iml
 app/app.iml
 local.properties
+*.iml

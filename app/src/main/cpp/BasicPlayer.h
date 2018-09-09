@@ -29,7 +29,23 @@
 // return: == 0 - success
 //          < 0 - error code
 
+typedef struct PacketQueue {
+
+    AVPacketList *first_pkt, *last_pkt;
+    int nb_packets;
+    int size;
+    int abort_request;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} PacketQueue;
+
 typedef struct VideoState {
+    ANativeWindow* nativeWindow;
+
+    pthread_t video_tid;
+
+    PacketQueue videoq;
+
     AVFormatContext *ic;
     int video_stream;
     int audio_stream;
