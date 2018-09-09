@@ -43,8 +43,10 @@ typedef struct VideoState {
     ANativeWindow* nativeWindow;
 
     pthread_t video_tid;
+    pthread_t audio_tid;
 
     PacketQueue videoq;
+    PacketQueue audioq;
 
     AVFormatContext *ic;
     int video_stream;

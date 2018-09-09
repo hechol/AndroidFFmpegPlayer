@@ -298,6 +298,11 @@ int video_thread(void *arg)
     }
 }
 
+void* audio_thread(void *t){
+    bqPlayerCallback(bqPlayerBufferQueue, NULL);
+    return NULL;
+}
+
 int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow)
 {
     AVFormatContext *ic = is->ic;
@@ -338,6 +343,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
         case AVMEDIA_TYPE_AUDIO:
             is->audio_stream = stream_index;
             is->audio_st = ic->streams[stream_index];
+            packet_queue_init(&is->audioq);
 
             // audio init
             swr = swr_alloc_set_opts(NULL,
@@ -355,6 +361,8 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             audioFrame = avcodec_alloc_frame();
 
             createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
+
+            pthread_create(&is->audio_tid, NULL, audio_thread, NULL);
             //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
             break;
         default:
@@ -395,79 +403,12 @@ int decodeFrame(ANativeWindow* nativeWindow)
 
                 packet_queue_put(&is->videoq, &packet);
 
-                /*
-                avcodec_decode_video2(is->video_st->codec, gFrame, &frameFinished, &packet);
-
-                double pts;
-                if ((pts = av_frame_get_best_effort_timestamp(gFrame)) == AV_NOPTS_VALUE) {
-                    pts = 0;
-                }
-                pts *= av_q2d(is->video_st->time_base);
-                is->video_current_pts = pts;
-                is->video_current_pts_time = av_gettime();
-
-                if (frameFinished) {
-                    gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
-                                                          is->video_st->codec->width, is->video_st->codec->height, is->video_st->codec->pix_fmt,
-                                                          is->video_st->codec->width, is->video_st->codec->height, PIX_FMT_RGBA, SWS_BICUBIC, NULL, NULL, NULL);
-
-                    sws_scale(gImgConvertCtx, gFrame->data, gFrame->linesize, 0, is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
-
-                    ANativeWindow_lock(nativeWindow, &windowBuffer, 0);
-
-                    uint8_t * dst = windowBuffer.bits;
-                    int dstStride = windowBuffer.stride * 4;
-                    uint8_t * src = (uint8_t*) (gFrameRGB->data[0]);
-                    int srcStride = gFrameRGB->linesize[0];
-
-                    int h;
-                    for (h = 0; h < is->video_st->codec->height; h++) {
-                        memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-                    }
-
-                    ANativeWindow_unlockAndPost(nativeWindow);
-
-                    av_free_packet(&packet);
-
-                    //usleep(11000);
-
-                    return 0;
-                }
-                 */
                 return 0;
 
             }else if(packet.stream_index == is->audio_stream){
-                avcodec_decode_audio4(is->audio_st->codec, &audioFrame, &frameFinished, &packet);
-                if (frameFinished) {
-                    audio_data_size = av_samples_get_buffer_size(
-                            audioFrame.linesize, is->audio_st->codec->channels,
-                            audioFrame.nb_samples, is->audio_st->codec->sample_fmt, 1);
 
-                    if (audio_data_size > outputBufferSize) {
-                        audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
-                                                                sizeof(uint8_t) * outputBufferSize);
-                    }
+                packet_queue_put(&is->audioq, &packet);
 
-                    swr_convert(swr, &audioOutputBuffer, audioFrame.nb_samples,
-                                (uint8_t const **) (audioFrame.extended_data),
-                                audioFrame.nb_samples);
-
-                    if (NULL != audioOutputBuffer && 0 != audio_data_size) {
-
-                        SLresult result;
-                        // enqueue another buffer
-                        result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
-                                                                 audio_data_size);
-                        // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
-                        // which for this code example would indicate a programming error
-                        (void)result;
-                    }
-
-                    av_free_packet(&packet);
-                    return 0;
-                }else{
-                    av_free_packet(&packet);
-                }
             }
         }else{
             printf("abc");
@@ -520,104 +461,47 @@ void closeMovie()
 AVPacket audioPacket;
 
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
-    return;
-}
 
-/*
-// this callback handler is called every time a buffer finishes playing
-void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
-{
-    //assert(NULL == context);
+    for (;;)
+    {
+        if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0)
+            return;
 
-    int frameFinished = 0;
+        AVCodecContext *dec = is->audio_st->codec;
+        int frameFinished = 0;
 
-    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
-        if(audioPacket.stream_index == gAudioStreamIdx){
-            avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
-            if (frameFinished) {
-                audio_data_size = av_samples_get_buffer_size(
-                        audioFrame->linesize, gAudioCodecCtx->channels,
-                        audioFrame->nb_samples, gAudioCodecCtx->sample_fmt, 1);
+        avcodec_decode_audio4(dec, audioFrame, &frameFinished, &audioPacket);
+        if (frameFinished) {
+            audio_data_size = av_samples_get_buffer_size(
+                    audioFrame->linesize, dec->channels,
+                    audioFrame->nb_samples, dec->sample_fmt, 1);
 
-                if (audio_data_size > outputBufferSize) {
-                    audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
-                                                            sizeof(uint8_t) * outputBufferSize);
-                }
-
-                swr_convert(swr, &audioOutputBuffer, audioFrame->nb_samples,
-                            (uint8_t const **) (audioFrame->extended_data),
-                            audioFrame->nb_samples);
-
-                // for streaming playback, replace this test by logic to find and fill the next buffer
-                if (NULL != audioOutputBuffer && 0 != audio_data_size) {
-
-
-
-                    SLresult result;
-                    // enqueue another buffer
-                    result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
-                                                             audio_data_size);
-                    // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
-                    // which for this code example would indicate a programming error
-                    (void)result;
-
-                    av_free_packet(&audioPacket);
-
-
-                }else{
-                    return;
-                }
+            if (audio_data_size > outputBufferSize) {
+                audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
+                                                        sizeof(uint8_t) * outputBufferSize);
             }
+
+            swr_convert(swr, &audioOutputBuffer, audioFrame->nb_samples,
+                        (uint8_t const **) (audioFrame->extended_data),
+                        audioFrame->nb_samples);
+
+            // for streaming playback, replace this test by logic to find and fill the next buffer
+            if (NULL != audioOutputBuffer && 0 != audio_data_size) {
+
+                SLresult result;
+                // enqueue another buffer
+                result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
+                                                         audio_data_size);
+                // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
+                // which for this code example would indicate a programming error
+                (void) result;
+
+                av_free_packet(&audioPacket);
+            }
+            return;
         }
     }
-    return;
 }
-*/
-
-/*
-// this callback handler is called every time a buffer finishes playing
-void bbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
-{
-    //assert(NULL == context);
-
-    int frameFinished = 0;
-
-    while (av_read_frame(gFormatCtx, &audioPacket) >= 0) {
-        if(audioPacket.stream_index == gAudioStreamIdx){
-            avcodec_decode_audio4(gAudioCodecCtx, audioFrame, &frameFinished, &audioPacket);
-            if (frameFinished) {
-                audio_data_size = av_samples_get_buffer_size(
-                        audioFrame->linesize, gAudioCodecCtx->channels,
-                        audioFrame->nb_samples, gAudioCodecCtx->sample_fmt, 1);
-
-                if (audio_data_size > outputBufferSize) {
-                    audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
-                                                            sizeof(uint8_t) * outputBufferSize);
-                }
-
-                swr_convert(swr, &audioOutputBuffer, audioFrame->nb_samples,
-                            (uint8_t const **) (audioFrame->extended_data),
-                            audioFrame->nb_samples);
-                break;
-            }
-        }
-
-        av_free_packet(&audioPacket);
-    }
-
-    // for streaming playback, replace this test by logic to find and fill the next buffer
-    if (NULL != audioOutputBuffer && 0 != audio_data_size) {
-        SLresult result;
-        // enqueue another buffer
-        result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, audioOutputBuffer,
-                                                 audio_data_size);
-        // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
-        // which for this code example would indicate a programming error
-        (void)result;
-    }
-    return;
-}
-*/
 
 // create buffer queue audio player
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample)
