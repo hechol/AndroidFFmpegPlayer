@@ -293,7 +293,7 @@ int video_thread(void *arg)
 
             av_free_packet(pkt);
 
-            //usleep(11000);
+            usleep(21000);
         }
     }
 }
@@ -378,41 +378,38 @@ int decodeFrame(ANativeWindow* nativeWindow)
     static AVFrame audioFrame;
     ANativeWindow_Buffer windowBuffer;
 
-    for(;;){
+    if(is->seek_req) {
+        int stream_index= -1;
+        int64_t seek_target = is->seek_pos;
 
-        if(is->seek_req) {
-            int stream_index= -1;
-            int64_t seek_target = is->seek_pos;
+        stream_index = is->video_stream;
 
-            stream_index = is->video_stream;
-
-            if(stream_index>=0){
-                seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
-                                          is->ic->streams[stream_index]->time_base);
-            }
-            if(av_seek_frame(is->ic, stream_index,
-                             seek_target, is->seek_flags) < 0) {
-                fprintf(stderr, "%s: error while seeking\n",
-                        is->ic->filename);
-            }
-            is->seek_req = 0;
+        if(stream_index>=0){
+            seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
+                                      is->ic->streams[stream_index]->time_base);
         }
-
-        if(av_read_frame(is->ic, &packet) >= 0) {
-            if (packet.stream_index == is->video_stream) {
-
-                packet_queue_put(&is->videoq, &packet);
-
-                return 0;
-
-            }else if(packet.stream_index == is->audio_stream){
-
-                packet_queue_put(&is->audioq, &packet);
-
-            }
-        }else{
-            printf("abc");
+        if(av_seek_frame(is->ic, stream_index,
+                         seek_target, is->seek_flags) < 0) {
+            fprintf(stderr, "%s: error while seeking\n",
+                    is->ic->filename);
         }
+        is->seek_req = 0;
+    }
+
+    if(av_read_frame(is->ic, &packet) >= 0) {
+        if (packet.stream_index == is->video_stream) {
+
+            packet_queue_put(&is->videoq, &packet);
+
+            return 0;
+
+        }else if(packet.stream_index == is->audio_stream){
+
+            packet_queue_put(&is->audioq, &packet);
+
+        }
+    }else{
+        printf("abc");
     }
 
     return -1;
