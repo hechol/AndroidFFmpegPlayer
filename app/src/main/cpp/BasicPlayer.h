@@ -49,6 +49,7 @@ typedef struct VideoState {
 
     VideoPicture pictq[VIDEO_PICTURE_QUEUE_SIZE];
     int pictq_rindex;
+    int pictq_windex;
     int pictq_size;
 
     ANativeWindow* nativeWindow;

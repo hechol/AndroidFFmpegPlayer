@@ -168,6 +168,7 @@ void createEngine() {
 
     is = av_mallocz(sizeof(VideoState));
     is->pictq_rindex = 0;
+    is->pictq_windex = 0;
     is->frame_last_pts = 0;
     is->pictq_size = 0;
 
@@ -288,6 +289,8 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
     if (actual_delay < 0.010) {
         /* XXX: should skip picture */
         actual_delay = 0.010;
+    }else{
+        actual_delay = actual_delay;
     }
 
     return actual_delay;
@@ -325,7 +328,7 @@ int refresh_thread(void *arg)
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
             pthread_mutex_unlock(&refresh_mutex);
 
-            usleep(pNode->data);
+            usleep(pNode->data * 1000);
             video_refresh_timer();
         }else{
             pthread_mutex_unlock(&refresh_mutex);
@@ -346,6 +349,9 @@ int queue_picture(AVFrame *src_frame, double pts){
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
     }
     pthread_mutex_unlock(&is->pictq_mutex);
+
+    VideoPicture *vp;
+    vp = &is->pictq[is->pictq_windex];
 
     ANativeWindow_Buffer windowBuffer;
 
@@ -373,6 +379,11 @@ int queue_picture(AVFrame *src_frame, double pts){
        }
 
        ANativeWindow_unlockAndPost(is->nativeWindow);
+
+    vp->pts = pts;
+
+    if (++is->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE)
+        is->pictq_windex = 0;
 
     pthread_mutex_lock(&is->pictq_mutex);
     is->pictq_size++;
