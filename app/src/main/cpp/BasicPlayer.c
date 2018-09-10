@@ -352,17 +352,18 @@ int queue_picture(AVFrame *src_frame, double pts){
 
     ANativeWindow_lock(is->nativeWindow, &windowBuffer, 0);
 
-    uint8_t *dst = windowBuffer.bits;
-    int dstStride = windowBuffer.stride * 4;
-    uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
-    int srcStride = gFrameRGB->linesize[0];
+       uint8_t *dst = windowBuffer.bits;
+       int dstStride = windowBuffer.stride * 4;
+       uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+       int srcStride = gFrameRGB->linesize[0];
 
-    int h;
-    for (h = 0; h < is->video_st->codec->height; h++) {
-        memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-    }
+       int h;
+       for (h = 0; h < is->video_st->codec->height; h++) {
+          memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+       }
 
-    ANativeWindow_unlockAndPost(is->nativeWindow);
+       ANativeWindow_unlockAndPost(is->nativeWindow);
+
 
     /*
     pthread_mutex_lock(&is->pictq_mutex);
@@ -392,11 +393,13 @@ int video_thread(void *arg)
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
 
-        ANativeWindow_Buffer windowBuffer;
+
 
         if (got_picture) {
 
-            //queue_picture(frame, pts);
+            queue_picture(frame, pts);
+/*
+            ANativeWindow_Buffer windowBuffer;
 
             gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
                                                   is->video_st->codec->width,
@@ -422,7 +425,7 @@ int video_thread(void *arg)
             }
 
             ANativeWindow_unlockAndPost(is->nativeWindow);
-
+*/
 
             av_free_packet(pkt);
 
