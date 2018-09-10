@@ -10,7 +10,12 @@
 
 
 #include "BasicPlayer.h"
+#include "linkedqueue.h"
 #include <unistd.h>
+
+pthread_t refresh_tid;
+pthread_mutex_t refresh_mutex;
+LinkedQueue* refreshTimeQueue;
 
 size_t outputBufferSize;
 
@@ -159,9 +164,12 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
     return ret;
 }
 
-void createEngine()
-{
+void createEngine() {
+
     is = av_mallocz(sizeof(VideoState));
+    is->pictq_rindex = 0;
+    is->frame_last_pts = 0;
+    is->pictq_size = 0;
 
     av_init_packet(&flush_pkt);
     flush_pkt.data= "FLUSH";
@@ -196,6 +204,8 @@ void createEngine()
                 outputMixEnvironmentalReverb, &reverbSettings);
     }
 }
+
+
 
 int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 {
@@ -234,7 +244,9 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
         stream_component_open(is, video_index, nativeWindow);
     }
 
+    refreshTimeQueue = createLinkedQueue();
 
+    //pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
     for(;;){
         decodeFrame(nativeWindow);
@@ -243,11 +255,127 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     return 0;
 }
 
+void schedule_refresh(int delay)
+{
+    QueueNode node;
+    node.data = delay;
+    enqueueLQ(refreshTimeQueue, node);
+}
+
+double compute_frame_delay(double frame_current_pts, VideoState *is)
+{
+    double actual_delay, delay, sync_threshold, ref_clock, diff;
+
+    /* compute nominal delay */
+    delay = frame_current_pts - is->frame_last_pts;
+    if (delay <= 0 || delay >= 10.0) {
+        /* if incorrect delay, use previous one */
+        delay = is->frame_last_delay;
+    } else {
+        is->frame_last_delay = delay;
+    }
+    is->frame_last_pts = frame_current_pts;
+
+    is->frame_timer += delay;
+    /* compute the REAL delay (we need to do that to avoid
+       long term errors */
+    actual_delay = is->frame_timer - (av_gettime() / 1000000.0);
+    if (actual_delay < 0.010) {
+        /* XXX: should skip picture */
+        actual_delay = 0.010;
+    }
+
+    return actual_delay;
+}
+
+void video_refresh_timer()
+{
+    VideoPicture *vp;
+
+    if (is->pictq_size == 0) {
+        /* if no picture, need to wait */
+        //schedule_refresh(1);
+    }else{
+        vp = &is->pictq[is->pictq_rindex];
+
+        /* update current video pts */
+        is->video_current_pts = vp->pts;
+        is->video_current_pts_time = av_gettime();
+
+        schedule_refresh((int)(compute_frame_delay(vp->pts, is) * 1000 + 0.5));
+
+        pthread_mutex_lock(&is->pictq_mutex);
+        is->pictq_size--;
+        pthread_cond_signal(&is->pictq_cond);
+        pthread_mutex_unlock(&is->pictq_mutex);
+    }
+}
+
+int refresh_thread(void *arg)
+{
+    for(;;){
+        if (isLinkedQueueEmpty(refreshTimeQueue) == FALSE) {
+            QueueNode* pNode = dequeueLQ(refreshTimeQueue);
+
+            usleep(pNode->data);
+            video_refresh_timer();
+        }
+    }
+
+    return NULL;
+}
+
+int queue_picture(AVFrame *src_frame, double pts){
+
+    /*
+    pthread_mutex_lock(&is->pictq_mutex);
+
+    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE){
+        pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
+    }
+
+    pthread_mutex_unlock(&is->pictq_mutex);
+      */
+
+    ANativeWindow_Buffer windowBuffer;
+
+    gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
+                                          is->video_st->codec->width,
+                                          is->video_st->codec->height,
+                                          is->video_st->codec->pix_fmt,
+                                          is->video_st->codec->width,
+                                          is->video_st->codec->height, PIX_FMT_RGBA,
+                                          SWS_BICUBIC, NULL, NULL, NULL);
+
+    sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
+              is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
+
+    ANativeWindow_lock(is->nativeWindow, &windowBuffer, 0);
+
+    uint8_t *dst = windowBuffer.bits;
+    int dstStride = windowBuffer.stride * 4;
+    uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+    int srcStride = gFrameRGB->linesize[0];
+
+    int h;
+    for (h = 0; h < is->video_st->codec->height; h++) {
+        memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+    }
+
+    ANativeWindow_unlockAndPost(is->nativeWindow);
+
+    /*
+    pthread_mutex_lock(&is->pictq_mutex);
+    is->pictq_size++;
+    pthread_mutex_unlock(&is->pictq_mutex);
+     */
+}
+
 int video_thread(void *arg)
 {
     AVPacket *pkt;
     int got_picture = 0;
-    ANativeWindow_Buffer windowBuffer;
+
     AVFrame *frame= avcodec_alloc_frame();
 
     for(;;) {
@@ -258,14 +386,18 @@ int video_thread(void *arg)
         avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
 
         double pts;
-        if ((pts = av_frame_get_best_effort_timestamp(frame)) == AV_NOPTS_VALUE) {
-            pts = 0;
-        }
+        if(pkt->dts != AV_NOPTS_VALUE)
+            pts= pkt->dts;
+        else
+            pts= 0;
         pts *= av_q2d(is->video_st->time_base);
-        is->video_current_pts = pts;
-        is->video_current_pts_time = av_gettime();
+
+        ANativeWindow_Buffer windowBuffer;
 
         if (got_picture) {
+
+            //queue_picture(frame, pts);
+
             gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
                                                   is->video_st->codec->width,
                                                   is->video_st->codec->height,
@@ -291,9 +423,10 @@ int video_thread(void *arg)
 
             ANativeWindow_unlockAndPost(is->nativeWindow);
 
+
             av_free_packet(pkt);
 
-            usleep(21000);
+            //usleep(21000);
         }
     }
 }
@@ -316,6 +449,10 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
     switch(enc->codec_type) {
         case AVMEDIA_TYPE_VIDEO:
+            is->frame_last_delay = 40e-3;
+            is->frame_timer = (double)av_gettime() / 1000000.0;
+            is->video_current_pts_time = av_gettime();
+
             is->video_stream = stream_index;
             is->video_st = ic->streams[stream_index];
 

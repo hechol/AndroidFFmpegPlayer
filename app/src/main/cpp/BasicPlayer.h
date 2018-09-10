@@ -29,6 +29,12 @@
 // return: == 0 - success
 //          < 0 - error code
 
+#define VIDEO_PICTURE_QUEUE_SIZE 1
+
+typedef struct VideoPicture {
+    double pts;
+} VideoPicture;
+
 typedef struct PacketQueue {
 
     AVPacketList *first_pkt, *last_pkt;
@@ -40,10 +46,18 @@ typedef struct PacketQueue {
 } PacketQueue;
 
 typedef struct VideoState {
+
+    VideoPicture pictq[VIDEO_PICTURE_QUEUE_SIZE];
+    int pictq_rindex;
+    int pictq_size;
+
     ANativeWindow* nativeWindow;
 
     pthread_t video_tid;
     pthread_t audio_tid;
+
+    pthread_mutex_t pictq_mutex;
+    pthread_cond_t pictq_cond;
 
     PacketQueue videoq;
     PacketQueue audioq;
@@ -52,6 +66,9 @@ typedef struct VideoState {
     int video_stream;
     int audio_stream;
 
+    double frame_last_pts;
+    double frame_last_delay;
+    double frame_timer;
     double          video_current_pts;
     int64_t         video_current_pts_time;
 
@@ -76,5 +93,5 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 double get_master_clock(VideoState *is);
 void stream_seek(double rel);
-
+int refresh_thread(void *arg);
 #endif
