@@ -246,7 +246,7 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 
     refreshTimeQueue = createLinkedQueue();
 
-    //pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
+    pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
     for(;;){
         decodeFrame(nativeWindow);
@@ -259,7 +259,12 @@ void schedule_refresh(int delay)
 {
     QueueNode node;
     node.data = delay;
+
+    pthread_mutex_lock(&refresh_mutex);
+
     enqueueLQ(refreshTimeQueue, node);
+
+    pthread_mutex_unlock(&refresh_mutex);
 }
 
 double compute_frame_delay(double frame_current_pts, VideoState *is)
@@ -294,7 +299,7 @@ void video_refresh_timer()
 
     if (is->pictq_size == 0) {
         /* if no picture, need to wait */
-        //schedule_refresh(1);
+        schedule_refresh(1);
     }else{
         vp = &is->pictq[is->pictq_rindex];
 
@@ -314,12 +319,21 @@ void video_refresh_timer()
 int refresh_thread(void *arg)
 {
     for(;;){
+        pthread_mutex_lock(&refresh_mutex);
+
         if (isLinkedQueueEmpty(refreshTimeQueue) == FALSE) {
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
+            pthread_mutex_unlock(&refresh_mutex);
 
             usleep(pNode->data);
             video_refresh_timer();
+        }else{
+            pthread_mutex_unlock(&refresh_mutex);
+
+            usleep(1);
         }
+
+
     }
 
     return NULL;
@@ -327,15 +341,11 @@ int refresh_thread(void *arg)
 
 int queue_picture(AVFrame *src_frame, double pts){
 
-    /*
     pthread_mutex_lock(&is->pictq_mutex);
-
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE){
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
     }
-
     pthread_mutex_unlock(&is->pictq_mutex);
-      */
 
     ANativeWindow_Buffer windowBuffer;
 
@@ -364,18 +374,17 @@ int queue_picture(AVFrame *src_frame, double pts){
 
        ANativeWindow_unlockAndPost(is->nativeWindow);
 
-
-    /*
     pthread_mutex_lock(&is->pictq_mutex);
     is->pictq_size++;
     pthread_mutex_unlock(&is->pictq_mutex);
-     */
 }
 
 int video_thread(void *arg)
 {
     AVPacket *pkt;
     int got_picture = 0;
+
+    schedule_refresh(1);
 
     AVFrame *frame= avcodec_alloc_frame();
 
