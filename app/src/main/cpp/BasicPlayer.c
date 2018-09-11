@@ -303,6 +303,7 @@ void video_refresh_timer()
 
     if (is->pictq_size == 0) {
         /* if no picture, need to wait */
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "error: schedule_refresh 1");
         schedule_refresh(1);
     }else{
         vp = &is->pictq[is->pictq_rindex];
@@ -329,7 +330,12 @@ int refresh_thread(void *arg)
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
             pthread_mutex_unlock(&refresh_mutex);
 
+            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "frame refresh start: %d", pNode->data);
+
             usleep(pNode->data * 1000);
+
+            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "frame refresh end: %d", pNode->data);
+
             video_refresh_timer();
         }else{
             pthread_mutex_unlock(&refresh_mutex);
@@ -353,9 +359,12 @@ int queue_picture(AVFrame *src_frame, double pts){
 
     pthread_mutex_lock(&is->pictq_mutex);
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE){
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait start");
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
     }
     pthread_mutex_unlock(&is->pictq_mutex);
+
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait end");
 
     VideoPicture *vp;
     vp = &is->pictq[is->pictq_windex];
@@ -394,7 +403,10 @@ int queue_picture(AVFrame *src_frame, double pts){
 
     pthread_mutex_lock(&is->pictq_mutex);
     is->pictq_size++;
+
     pthread_mutex_unlock(&is->pictq_mutex);
+
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture render end");
 }
 
 int video_thread(void *arg)
@@ -411,6 +423,11 @@ int video_thread(void *arg)
         if (packet_queue_get(&is->videoq, pkt, 1) < 0)
             break;
 
+        if(pkt->data == flush_pkt.data){
+            avcodec_flush_buffers(is->video_st->codec);
+            continue;
+        }
+
         avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
 
         double pts;
@@ -425,38 +442,8 @@ int video_thread(void *arg)
         if (got_picture) {
 
             queue_picture(frame, pts);
-/*
-            ANativeWindow_Buffer windowBuffer;
-
-            gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
-                                                  is->video_st->codec->width,
-                                                  is->video_st->codec->height,
-                                                  is->video_st->codec->pix_fmt,
-                                                  is->video_st->codec->width,
-                                                  is->video_st->codec->height, PIX_FMT_RGBA,
-                                                  SWS_BICUBIC, NULL, NULL, NULL);
-
-            sws_scale(gImgConvertCtx, frame->data, frame->linesize, 0,
-                      is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
-
-            ANativeWindow_lock(is->nativeWindow, &windowBuffer, 0);
-
-            uint8_t *dst = windowBuffer.bits;
-            int dstStride = windowBuffer.stride * 4;
-            uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
-            int srcStride = gFrameRGB->linesize[0];
-
-            int h;
-            for (h = 0; h < is->video_st->codec->height; h++) {
-                memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-            }
-
-            ANativeWindow_unlockAndPost(is->nativeWindow);
-*/
 
             av_free_packet(pkt);
-
-            //usleep(21000);
         }
     }
 }
@@ -560,6 +547,16 @@ int decodeFrame(ANativeWindow* nativeWindow)
             fprintf(stderr, "%s: error while seeking\n",
                     is->ic->filename);
         }
+
+        if (is->audio_stream >= 0) {
+            packet_queue_flush(&is->audioq);
+            packet_queue_put(&is->audioq, &flush_pkt);
+        }
+        if (is->video_stream >= 0) {
+            packet_queue_flush(&is->videoq);
+            packet_queue_put(&is->videoq, &flush_pkt);
+        }
+
         is->seek_req = 0;
     }
 
@@ -632,6 +629,12 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
             return;
 
         AVCodecContext *dec = is->audio_st->codec;
+
+        if(audioPacket.data == flush_pkt.data){
+            avcodec_flush_buffers(dec);
+            continue;
+        }
+
         int frameFinished = 0;
 
         avcodec_decode_audio4(dec, audioFrame, &frameFinished, &audioPacket);

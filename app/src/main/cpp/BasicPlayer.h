@@ -18,6 +18,7 @@
 #include <android/bitmap.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#include <android/log.h>
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 
