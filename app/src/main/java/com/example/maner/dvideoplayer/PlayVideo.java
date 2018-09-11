@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -13,12 +14,16 @@ import android.support.v7.widget.Toolbar;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
 public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callback {
 
     String fileName = "";
+
+    Handler mHandler;
+    SurfaceView mPreview;
 
     static {
         System.loadLibrary("native-lib");
@@ -36,12 +41,14 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         Intent intent = getIntent();
         fileName = intent.getStringExtra("file_name");
 
-        SurfaceView surfaceView = (SurfaceView) findViewById(R.id.surfaceView);
-        SurfaceHolder surfaceHolder = surfaceView.getHolder();
+        mPreview = (SurfaceView) findViewById(R.id.surfaceView);
+        SurfaceHolder surfaceHolder = mPreview.getHolder();
         surfaceHolder.addCallback(this);
 
         //MoviePlayView playView = new MoviePlayView(this, fileName);
         //setContentView(playView);
+
+        mHandler = new Handler();
     }
 
     @Override
@@ -52,6 +59,12 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
                 initBasicPlayer();
 
                 int openResult = openMovie(fileName, surfaceHolderaa.getSurface());
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        checkRatio();
+                    }
+                });
             }
         }).start();
     }
@@ -77,6 +90,28 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
 
     }
 
+    private void checkRatio() {
+        int surfaceView_Width = mPreview.getWidth();
+        int surfaceView_Height = mPreview.getHeight();
+
+        float video_Width = getMovieWidth();
+        float video_Height = getMovieHeight();
+
+        float ratio_width = surfaceView_Width / video_Width;
+        float ratio_height = surfaceView_Height / video_Height;
+        float aspectratio = video_Width / video_Height;
+
+        ViewGroup.LayoutParams layoutParams = mPreview.getLayoutParams();
+        if (ratio_width > ratio_height) {
+            layoutParams.width = (int) (surfaceView_Height * aspectratio);
+            layoutParams.height = surfaceView_Height;
+        } else {
+            layoutParams.width = surfaceView_Width;
+            layoutParams.height = (int) (surfaceView_Width / aspectratio);
+        }
+        mPreview.setLayoutParams(layoutParams);
+    }
+
     public static native int initBasicPlayer();
     public static native int openMovie(String filePath, Object surface);
     public static native int renderFrame(Bitmap bitmap);
@@ -85,6 +120,8 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
     public static native void closeMovie();
     public static native void StreamSeek(double incr);
 }
+
+
 
 /*
 class MoviePlayView extends View {

@@ -86,7 +86,7 @@ typedef struct VideoState {
 } VideoState;
 
 int openMovie(ANativeWindow* nativeWindow, const char filePath[]);
-int decodeFrame(ANativeWindow* nativeWindow);
+int decodeFrame(void* arge);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();

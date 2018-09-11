@@ -13,6 +13,7 @@
 #include "linkedqueue.h"
 #include <unistd.h>
 
+pthread_t parse_tid;
 pthread_t refresh_tid;
 pthread_mutex_t refresh_mutex;
 LinkedQueue* refreshTimeQueue;
@@ -250,9 +251,11 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
 
     pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
-    for(;;){
-        decodeFrame(nativeWindow);
-    }
+    pthread_create(&parse_tid, NULL, decodeFrame, nativeWindow);
+
+//    for(;;){
+//        decodeFrame(nativeWindow);
+//    }
 
     return 0;
 }
@@ -382,7 +385,12 @@ int queue_picture(AVFrame *src_frame, double pts){
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
               is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
 
-    ANativeWindow_lock(is->nativeWindow, &windowBuffer, 0);
+    ARect rect;
+    rect.left = 0;
+    rect.right = 500;
+    rect.top = 0;
+    rect.bottom = 500;
+    ANativeWindow_lock(is->nativeWindow, &windowBuffer, &rect);
 
        uint8_t *dst = windowBuffer.bits;
        int dstStride = windowBuffer.stride * 4;
@@ -524,56 +532,57 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
     }
 }
 
-int decodeFrame(ANativeWindow* nativeWindow)
+int decodeFrame(void* arge)
 {
+    ANativeWindow* nativeWindow = arge;
     int frameFinished = 0;
     AVPacket packet;
 
     static AVFrame audioFrame;
     ANativeWindow_Buffer windowBuffer;
 
-    if(is->seek_req) {
-        int stream_index= -1;
-        int64_t seek_target = is->seek_pos;
+    for(;;){
+        if(is->seek_req) {
+            int stream_index= -1;
+            int64_t seek_target = is->seek_pos;
 
-        stream_index = is->video_stream;
+            stream_index = is->video_stream;
 
-        if(stream_index>=0){
-            seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
-                                      is->ic->streams[stream_index]->time_base);
+            if(stream_index>=0){
+                seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
+                                          is->ic->streams[stream_index]->time_base);
+            }
+            if(av_seek_frame(is->ic, stream_index,
+                             seek_target, is->seek_flags) < 0) {
+                fprintf(stderr, "%s: error while seeking\n",
+                        is->ic->filename);
+            }
+
+            if (is->audio_stream >= 0) {
+                packet_queue_flush(&is->audioq);
+                packet_queue_put(&is->audioq, &flush_pkt);
+            }
+            if (is->video_stream >= 0) {
+                packet_queue_flush(&is->videoq);
+                packet_queue_put(&is->videoq, &flush_pkt);
+            }
+
+            is->seek_req = 0;
         }
-        if(av_seek_frame(is->ic, stream_index,
-                         seek_target, is->seek_flags) < 0) {
-            fprintf(stderr, "%s: error while seeking\n",
-                    is->ic->filename);
+
+        if(av_read_frame(is->ic, &packet) >= 0) {
+            if (packet.stream_index == is->video_stream) {
+
+                packet_queue_put(&is->videoq, &packet);
+
+            }else if(packet.stream_index == is->audio_stream){
+
+                packet_queue_put(&is->audioq, &packet);
+
+            }
+        }else{
+            printf("abc");
         }
-
-        if (is->audio_stream >= 0) {
-            packet_queue_flush(&is->audioq);
-            packet_queue_put(&is->audioq, &flush_pkt);
-        }
-        if (is->video_stream >= 0) {
-            packet_queue_flush(&is->videoq);
-            packet_queue_put(&is->videoq, &flush_pkt);
-        }
-
-        is->seek_req = 0;
-    }
-
-    if(av_read_frame(is->ic, &packet) >= 0) {
-        if (packet.stream_index == is->video_stream) {
-
-            packet_queue_put(&is->videoq, &packet);
-
-            return 0;
-
-        }else if(packet.stream_index == is->audio_stream){
-
-            packet_queue_put(&is->audioq, &packet);
-
-        }
-    }else{
-        printf("abc");
     }
 
     return -1;
