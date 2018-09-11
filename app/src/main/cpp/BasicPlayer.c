@@ -167,6 +167,7 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 void createEngine() {
 
     is = av_mallocz(sizeof(VideoState));
+    is->ready = 0;
     is->pictq_rindex = 0;
     is->pictq_windex = 0;
     is->frame_last_pts = 0;
@@ -344,6 +345,12 @@ int refresh_thread(void *arg)
 
 int queue_picture(AVFrame *src_frame, double pts){
 
+    if((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)){
+        is->ready = 1;
+        video_refresh_timer();
+        bqPlayerCallback(bqPlayerBufferQueue, NULL);
+    }
+
     pthread_mutex_lock(&is->pictq_mutex);
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE){
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
@@ -395,7 +402,7 @@ int video_thread(void *arg)
     AVPacket *pkt;
     int got_picture = 0;
 
-    schedule_refresh(1);
+    //schedule_refresh(1);
 
     AVFrame *frame= avcodec_alloc_frame();
 
@@ -522,7 +529,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
             createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
 
-            pthread_create(&is->audio_tid, NULL, audio_thread, NULL);
+            //pthread_create(&is->audio_tid, NULL, audio_thread, NULL);
             //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
             break;
         default:

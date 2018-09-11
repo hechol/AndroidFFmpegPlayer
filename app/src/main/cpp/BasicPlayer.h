@@ -47,6 +47,9 @@ typedef struct PacketQueue {
 
 typedef struct VideoState {
 
+    int ready;
+    int paused;
+
     VideoPicture pictq[VIDEO_PICTURE_QUEUE_SIZE];
     int pictq_rindex;
     int pictq_windex;
