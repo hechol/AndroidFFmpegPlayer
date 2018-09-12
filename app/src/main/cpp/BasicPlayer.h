@@ -85,14 +85,14 @@ typedef struct VideoState {
     int64_t         seek_pos;
 } VideoState;
 
-int openMovie(ANativeWindow* nativeWindow, const char filePath[]);
+int openMovie(const char filePath[]);
 int decodeFrame(void* arge);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();
 void closeMovie();
 
-void createEngine();
+void createEngine(ANativeWindow* nativeWindow);
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample);
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);

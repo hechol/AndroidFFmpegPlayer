@@ -165,7 +165,7 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
     return ret;
 }
 
-void createEngine() {
+void createEngine(ANativeWindow* nativeWindow) {
 
     is = av_mallocz(sizeof(VideoState));
     is->ready = 0;
@@ -176,6 +176,11 @@ void createEngine() {
 
     av_init_packet(&flush_pkt);
     flush_pkt.data= "FLUSH";
+
+    AVFormatContext *ic = avformat_alloc_context();
+
+    is->nativeWindow = nativeWindow;
+    is->ic = ic;
 
     SLresult result;
 
@@ -210,26 +215,23 @@ void createEngine() {
 
 
 
-int openMovie(ANativeWindow* nativeWindow, const char filePath[])
+int openMovie(const char filePath[])
 {
-    createEngine();
-
     int video_index, audio_index;
 
-    AVFormatContext *ic = avformat_alloc_context();
 
-    if (avformat_open_input(&ic, filePath, NULL, NULL) != 0)
+
+    if (avformat_open_input(&is->ic, filePath, NULL, NULL) != 0)
         return -2;
 
-    is->nativeWindow = nativeWindow;
-    is->ic = ic;
 
-    if (avformat_find_stream_info(ic, 0) < 0)
+
+    if (avformat_find_stream_info(is->ic, 0) < 0)
         return -3;
 
     int i;
-    for (i = 0; i < ic->nb_streams; i++) {
-        AVCodecContext *enc = ic->streams[i]->codec;
+    for (i = 0; i < is->ic->nb_streams; i++) {
+        AVCodecContext *enc = is->ic->streams[i]->codec;
 
         if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
             video_index = i;
@@ -244,14 +246,14 @@ int openMovie(ANativeWindow* nativeWindow, const char filePath[])
     }
 
     if (video_index >= 0) {
-        stream_component_open(is, video_index, nativeWindow);
+        stream_component_open(is, video_index, is->nativeWindow);
     }
 
     refreshTimeQueue = createLinkedQueue();
 
     pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
-    pthread_create(&parse_tid, NULL, decodeFrame, nativeWindow);
+    pthread_create(&parse_tid, NULL, decodeFrame, is->nativeWindow);
 
 //    for(;;){
 //        decodeFrame(nativeWindow);

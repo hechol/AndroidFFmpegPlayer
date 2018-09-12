@@ -18,7 +18,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_example_maner_dvideoplayer_PlayVid
     return env->NewStringUTF(hello.c_str());
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_initBasicPlayer(JNIEnv *env, jobject thiz)
+extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_initBasicPlayer(JNIEnv *env, jobject thiz, jobject surface)
 {
     /*
     if (android_getCpuFamily() == ANDROID_CPU_FAMILY_ARM && (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON) != 0) {
@@ -30,19 +30,20 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
         return -1;
         */
 
-   av_register_all();
+    av_register_all();
+    ANativeWindow* nativeWindow = ANativeWindow_fromSurface(env, surface);
+    createEngine(nativeWindow);
     return 0;
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_openMovie(JNIEnv *env, jobject thiz, jstring filePath, jobject surface)
+extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_openMovie(JNIEnv *env, jobject thiz, jstring filePath)
 {
     const char *str;
     int result;
 
     str = env->GetStringUTFChars(filePath, NULL);
 
-    ANativeWindow* nativeWindow = ANativeWindow_fromSurface(env, surface);
-    result = openMovie(nativeWindow, str);
+    result = openMovie(str);
 
     env->ReleaseStringUTFChars(filePath, str);
 

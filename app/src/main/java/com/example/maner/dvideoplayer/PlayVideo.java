@@ -56,9 +56,8 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         new Thread(new Runnable() {
             @Override
             public void run() {
-                initBasicPlayer();
-
-                int openResult = openMovie(fileName, surfaceHolderaa.getSurface());
+                initBasicPlayer(surfaceHolderaa.getSurface());
+                int openResult = openMovie(fileName);
                 mHandler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -112,8 +111,8 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         mPreview.setLayoutParams(layoutParams);
     }
 
-    public static native int initBasicPlayer();
-    public static native int openMovie(String filePath, Object surface);
+    public static native int initBasicPlayer(Object surface);
+    public static native int openMovie(String filePath);
     public static native int renderFrame(Bitmap bitmap);
     public static native int getMovieWidth();
     public static native int getMovieHeight();
