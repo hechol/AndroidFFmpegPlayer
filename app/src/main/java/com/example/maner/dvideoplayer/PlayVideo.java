@@ -111,12 +111,19 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         mPreview.setLayoutParams(layoutParams);
     }
 
+    @Override
+    protected void onDestroy()
+    {
+        close();
+        super.onDestroy();
+    }
+
     public static native int initBasicPlayer(Object surface);
     public static native int openMovie(String filePath);
     public static native int renderFrame(Bitmap bitmap);
     public static native int getMovieWidth();
     public static native int getMovieHeight();
-    public static native void closeMovie();
+    public static native void close();
     public static native void StreamSeek(double incr);
 }
 

@@ -50,6 +50,7 @@ typedef struct VideoState {
 
     int ready;
     int paused;
+    int abort_request;
 
     VideoPicture pictq[VIDEO_PICTURE_QUEUE_SIZE];
     int pictq_rindex;
@@ -86,11 +87,15 @@ typedef struct VideoState {
 } VideoState;
 
 int openMovie(const char filePath[]);
-int decodeFrame(void* arge);
+int decode_thread(void* arge);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();
-void closeMovie();
+void do_exit(void);
+void closePlayer();
+void stream_close(VideoState *is);
+void stream_component_close(VideoState *is, int stream_index);
+void closeAudio();
 
 void createEngine(ANativeWindow* nativeWindow);
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample);

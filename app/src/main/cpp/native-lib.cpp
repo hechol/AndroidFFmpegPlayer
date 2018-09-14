@@ -76,9 +76,9 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
     return getHeight();
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_closeMovie(JNIEnv *env, jobject thiz)
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_close(JNIEnv *env, jobject thiz)
 {
-    closeMovie();
+    closePlayer();
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_StreamSeek(JNIEnv *env, jobject thiz, jdouble incr)

@@ -59,7 +59,7 @@ static size_t bufferSize;
 //int gVideoStreamIdx = -1;
 //int gAudioStreamIdx = -1;
 
-AVFrame *gFrame = NULL;
+//AVFrame *gFrame = NULL;
 AVFrame *gFrameRGB = NULL;
 
 struct SwsContext *gImgConvertCtx = NULL;
@@ -98,9 +98,20 @@ void packet_queue_flush(PacketQueue *q)
     pthread_mutex_unlock(&q->mutex);
 }
 
+PacketQueue *test __attribute__((aligned(8)));
+int my_counter __attribute__((aligned(8)));
+int my_counter2 __attribute__((aligned(4)));
+
 int packet_queue_put(PacketQueue *q, AVPacket *pkt)
 {
+
+    my_counter = 1;
+    my_counter2 = 1;
+
+    test = q;
     AVPacketList *pkt1;
+
+    pthread_mutex_lock(&q->mutex);
 
     /* duplicate the packet */
     if (pkt!=&flush_pkt && av_dup_packet(pkt) < 0)
@@ -112,7 +123,7 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     pkt1->pkt = *pkt;
     pkt1->next = NULL;
 
-    pthread_mutex_lock(&q->mutex);
+
 
     if (!q->last_pkt)
 
@@ -165,10 +176,30 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
     return ret;
 }
 
+void packet_queue_abort(PacketQueue *q)
+{
+    pthread_mutex_lock(&q->mutex);
+
+    q->abort_request = 1;
+
+    pthread_cond_signal(&q->cond);
+
+    pthread_mutex_unlock(&q->mutex);
+}
+
+void packet_queue_end(PacketQueue *q)
+{
+    packet_queue_flush(q);
+    pthread_mutex_destroy(&q->mutex);
+    pthread_cond_destroy(&q->cond);
+}
+
 void createEngine(ANativeWindow* nativeWindow) {
 
     is = av_mallocz(sizeof(VideoState));
     is->ready = 0;
+    is->abort_request = 0;
+
     is->pictq_rindex = 0;
     is->pictq_windex = 0;
     is->frame_last_pts = 0;
@@ -253,7 +284,7 @@ int openMovie(const char filePath[])
 
     pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
-    pthread_create(&parse_tid, NULL, decodeFrame, is->nativeWindow);
+    pthread_create(&parse_tid, NULL, decode_thread, is->nativeWindow);
 
 //    for(;;){
 //        decodeFrame(nativeWindow);
@@ -363,13 +394,17 @@ int queue_picture(AVFrame *src_frame, double pts){
     }
 
     pthread_mutex_lock(&is->pictq_mutex);
-    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE){
+    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE&&
+           !is->videoq.abort_request) {
         __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait start");
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
     }
     pthread_mutex_unlock(&is->pictq_mutex);
 
     __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait end");
+
+    if (is->videoq.abort_request)
+        return -1;
 
     VideoPicture *vp;
     vp = &is->pictq[is->pictq_windex];
@@ -421,7 +456,7 @@ int queue_picture(AVFrame *src_frame, double pts){
 
 int video_thread(void *arg)
 {
-    AVPacket *pkt;
+    AVPacket pkt1, *pkt = &pkt1;
     int got_picture = 0;
 
     //schedule_refresh(1);
@@ -456,6 +491,9 @@ int video_thread(void *arg)
             av_free_packet(pkt);
         }
     }
+
+    av_free(frame);
+    return 0;
 }
 
 void* audio_thread(void *t){
@@ -472,6 +510,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
     enc = ic->streams[stream_index]->codec;
     codec = avcodec_find_decoder(enc->codec_id);
     if (avcodec_open2(enc, codec, NULL) < 0)
+    //if (avcodec_open2(NULL, NULL, NULL) < 0)
         return -1;
 
     switch(enc->codec_type) {
@@ -485,9 +524,9 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
             packet_queue_init(&is->videoq);
 
-            gFrame = avcodec_alloc_frame();
-            if (gFrame == NULL)
-                return -7;
+            ///gFrame = avcodec_alloc_frame();
+            //if (gFrame == NULL)
+            //    return -7;
 
             gFrameRGB = avcodec_alloc_frame();
             if (gFrameRGB == NULL)
@@ -534,7 +573,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
     }
 }
 
-int decodeFrame(void* arge)
+int decode_thread(void* arge)
 {
     ANativeWindow* nativeWindow = arge;
     int frameFinished = 0;
@@ -544,6 +583,9 @@ int decodeFrame(void* arge)
     ANativeWindow_Buffer windowBuffer;
 
     for(;;){
+        if (is->abort_request)
+            break;
+
         if(is->seek_req) {
             int stream_index= -1;
             int64_t seek_target = is->seek_pos;
@@ -574,13 +616,11 @@ int decodeFrame(void* arge)
 
         if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
-
                 packet_queue_put(&is->videoq, &packet);
-
             }else if(packet.stream_index == is->audio_stream){
-
                 packet_queue_put(&is->audioq, &packet);
-
+            }else {
+                av_free_packet(&packet);
             }
         }else{
             printf("abc");
@@ -606,27 +646,20 @@ int getHeight()
     return is->video_st->codec->height;
 }
 
-void closeMovie()
+void closePlayer()
 {
     if (gVideoBuffer != NULL) {
         free(gVideoBuffer);
         gVideoBuffer = NULL;
     }
 
-    if (gFrame != NULL)
-        av_freep(gFrame);
+    //if (gFrame != NULL)
+    //    av_freep(gFrame);
     if (gFrameRGB != NULL)
         av_freep(gFrameRGB);
 
-    if (is->video_st->codec != NULL) {
-        avcodec_close(is->video_st->codec);
-        is->video_st->codec = NULL;
-    }
+    do_exit();
 
-    if (is->ic != NULL) {
-        //av_close_input_file(gFormatCtx);
-        is->ic = NULL;
-    }
     return;
 }
 
@@ -636,6 +669,10 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
 
     for (;;)
     {
+        if (is->audioq.abort_request) {
+            return ;
+        }
+
         if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0)
             return;
 
@@ -675,6 +712,8 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
                 (void) result;
 
                 av_free_packet(&audioPacket);
+
+
             }
             return;
         }
@@ -775,6 +814,124 @@ void stream_seek(double rel) {
         is->seek_pos = pos;
         is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
         is->seek_req = 1;
+    }
+}
+
+void do_exit(void)
+{
+    /* close each stream */
+    if (is->audio_stream >= 0)
+        stream_component_close(is, is->audio_stream);
+    if (is->video_stream >= 0)
+        stream_component_close(is, is->video_stream);
+
+    if (is->ic) {
+        avformat_close_input(&is->ic);
+        is->ic = NULL; /* safety */
+    }
+
+    free(audioOutputBuffer);
+    //av_free(audioOutputBuffer);
+
+    av_free(audioFrame);
+
+    if (is) {
+        stream_close(is);
+        is = NULL;
+    }
+
+    exit(0);
+}
+
+void stream_close(VideoState *is)
+{
+    VideoPicture *vp;
+    int i;
+    /* XXX: use a special url_shutdown call to abort parse cleanly */
+    is->abort_request = 1;
+
+    pthread_join(parse_tid, NULL);
+
+    pthread_mutex_destroy(&is->pictq_mutex);
+    pthread_cond_destroy(&is->pictq_cond);
+
+    av_free(is);
+}
+
+void stream_component_close(VideoState *is, int stream_index)
+{
+    AVFormatContext *ic = is->ic;
+    AVCodecContext *enc;
+
+    if (stream_index < 0 || stream_index >= ic->nb_streams)
+        return;
+    enc = ic->streams[stream_index]->codec;
+
+    switch(enc->codec_type) {
+        case AVMEDIA_TYPE_AUDIO:
+            packet_queue_abort(&is->audioq);
+
+            closeAudio();
+
+            packet_queue_end(&is->audioq);
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            packet_queue_abort(&is->videoq);
+
+            /* note: we also signal this mutex to make sure we deblock the
+               video thread in all cases */
+            pthread_mutex_lock(&is->pictq_mutex);
+            pthread_cond_signal(&is->pictq_cond);
+            pthread_mutex_unlock(&is->pictq_mutex);
+
+            pthread_join(is->video_tid, NULL);
+
+            packet_queue_end(&is->videoq);
+            break;
+        default:
+            break;
+    }
+
+    ic->streams[stream_index]->discard = AVDISCARD_ALL;
+    avcodec_close(enc);
+    switch(enc->codec_type) {
+        case AVMEDIA_TYPE_AUDIO:
+            is->audio_st = NULL;
+            is->audio_stream = -1;
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            is->video_st = NULL;
+            is->video_stream = -1;
+            break;
+        default:
+            break;
+    }
+}
+
+void closeAudio(){
+    // destroy buffer queue audio player object, and invalidate all associated interfaces
+    if (bqPlayerObject != NULL) {
+        (*bqPlayerObject)->Destroy(bqPlayerObject);
+        bqPlayerObject = NULL;
+        bqPlayerPlay = NULL;
+        bqPlayerBufferQueue = NULL;
+        bqPlayerEffectSend = NULL;
+        bqPlayerMuteSolo = NULL;
+        bqPlayerVolume = NULL;
+    }
+
+    // destroy output mix object, and invalidate all associated interfaces
+    if (outputMixObject != NULL) {
+        (*outputMixObject)->Destroy(outputMixObject);
+        outputMixObject = NULL;
+        outputMixEnvironmentalReverb = NULL;
+    }
+
+    // destroy engine object, and invalidate all associated interfaces
+    if (engineObject != NULL) {
+        (*engineObject)->Destroy(engineObject);
+        engineObject = NULL;
+        engineEngine = NULL;
     }
 }
 

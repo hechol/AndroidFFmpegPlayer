@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.4.1)
 
 set(ffmpeg_DIR ${CMAKE_SOURCE_DIR}/src/main/cpp/ffmpeg)
-include_directories(${ffmpeg_DIR}/include)
+include_directories(${ffmpeg_DIR}/${ANDROID_ABI}/include)
 
 add_library(avutil SHARED IMPORTED)
 set_target_properties(avutil PROPERTIES IMPORTED_LOCATION
