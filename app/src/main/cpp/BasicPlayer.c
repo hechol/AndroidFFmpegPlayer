@@ -196,6 +196,13 @@ void packet_queue_end(PacketQueue *q)
 
 void createEngine(ANativeWindow* nativeWindow) {
 
+    //char *org_name = (char *)malloc(sizeof(char));
+    //free(org_name);
+    //char *org_name2 = (char *)malloc(sizeof(char)*25);
+    //free(org_name2);
+    //uint8_t *gVideoBuffer2 = (uint8_t*)(malloc(sizeof(uint8_t) * 5));
+    //free(gVideoBuffer2);
+
     is = av_mallocz(sizeof(VideoState));
     is->ready = 0;
     is->abort_request = 0;
@@ -335,6 +342,10 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
 
 void video_refresh_timer()
 {
+    if(is->abort_request){
+        return;
+    }
+
     VideoPicture *vp;
 
     if (is->pictq_size == 0) {
@@ -360,6 +371,11 @@ void video_refresh_timer()
 int refresh_thread(void *arg)
 {
     for(;;){
+        if(is->abort_request){
+            deleteLinkedQueue(refreshTimeQueue);
+            return NULL;
+        }
+
         pthread_mutex_lock(&refresh_mutex);
 
         if (isLinkedQueueEmpty(refreshTimeQueue) == FALSE) {
@@ -648,17 +664,22 @@ int getHeight()
 
 void closePlayer()
 {
+    do_exit();
+
     if (gVideoBuffer != NULL) {
+        // char *org_name = (char *)av_mallocz(sizeof(char));
+        //av_free(org_name);
+        //char *org_name2 = (char *)av_mallocz(sizeof(char)*25);
+        // av_free(org_name2);
+
+        //uint8_t *gVideoBuffer2 = (uint8_t*)(malloc(sizeof(uint8_t) * 5));
+        //free(gVideoBuffer2);
         free(gVideoBuffer);
         gVideoBuffer = NULL;
     }
 
-    //if (gFrame != NULL)
-    //    av_freep(gFrame);
     if (gFrameRGB != NULL)
-        av_freep(gFrameRGB);
-
-    do_exit();
+        av_free(gFrameRGB);
 
     return;
 }
@@ -819,6 +840,10 @@ void stream_seek(double rel) {
 
 void do_exit(void)
 {
+    is->abort_request = 1;
+
+    pthread_join(refresh_tid, NULL);
+
     /* close each stream */
     if (is->audio_stream >= 0)
         stream_component_close(is, is->audio_stream);
@@ -848,7 +873,8 @@ void stream_close(VideoState *is)
     VideoPicture *vp;
     int i;
     /* XXX: use a special url_shutdown call to abort parse cleanly */
-    is->abort_request = 1;
+
+
 
     pthread_join(parse_tid, NULL);
 
@@ -934,5 +960,3 @@ void closeAudio(){
         engineEngine = NULL;
     }
 }
-
-

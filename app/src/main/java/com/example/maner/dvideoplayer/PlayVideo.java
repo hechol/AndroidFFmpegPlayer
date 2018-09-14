@@ -112,10 +112,16 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
     }
 
     @Override
+    public void onBackPressed() {
+        close();
+    }
+
+    @Override
     protected void onDestroy()
     {
-        close();
         super.onDestroy();
+
+
     }
 
     public static native int initBasicPlayer(Object surface);
