@@ -11,19 +11,28 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callback {
+public class PlayVideo extends Activity implements
+        SurfaceHolder.Callback,
+        GestureDetector.OnGestureListener,
+        GestureDetector.OnDoubleTapListener {
 
     String fileName = "";
 
     Handler mHandler;
     SurfaceView mPreview;
+    LinearLayout playerUI;;
+
+    GestureDetector mDetector;
 
     static {
         System.loadLibrary("native-lib");
@@ -45,10 +54,13 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         SurfaceHolder surfaceHolder = mPreview.getHolder();
         surfaceHolder.addCallback(this);
 
-        //MoviePlayView playView = new MoviePlayView(this, fileName);
-        //setContentView(playView);
+        playerUI = (LinearLayout) findViewById(R.id.player_ui);
+        playerUI.setVisibility(View.GONE);
 
         mHandler = new Handler();
+
+        mDetector = new GestureDetector(this, this);
+        mDetector.setIsLongpressEnabled(false);
     }
 
     @Override
@@ -68,8 +80,21 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
         }).start();
     }
 
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        System.out.println("onTouchEvent motionEvent: " + event.toString());
+
+        if (mDetector.onTouchEvent(event)) {
+            return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
     public void mOnClick(View v) {
         switch (v.getId()) {
+            case R.id.close:
+                playerUI.setVisibility(View.GONE);
+                break;
             case R.id.left:
                 StreamSeek(-10);
                 break;
@@ -120,8 +145,70 @@ public class PlayVideo extends AppCompatActivity implements SurfaceHolder.Callba
     protected void onDestroy()
     {
         super.onDestroy();
+    }
 
+    @Override
+    public boolean onSingleTapConfirmed(MotionEvent motionEvent) {
+        System.out.println("onSingleTapConfirmed motionEvent: " + motionEvent.getY());
+        return false;
+    }
 
+    @Override
+    public boolean onDoubleTap(MotionEvent motionEvent) {
+        System.out.println("onDoubleTap motionEvent: " + motionEvent.getY());
+        return false;
+    }
+
+    @Override
+    public boolean onDoubleTapEvent(MotionEvent motionEvent) {
+        System.out.println("onDoubleTapEvent motionEvent: " + motionEvent.getY());
+        return false;
+    }
+
+    @Override
+    public boolean onDown(MotionEvent motionEvent) {
+        System.out.println("onDown motionEvent: " + motionEvent.getY());
+        return false;
+    }
+
+    @Override
+    public void onShowPress(MotionEvent motionEvent) {
+        System.out.println("onShowPress motionEvent: " + motionEvent.getY());
+    }
+
+    @Override
+    public boolean onSingleTapUp(MotionEvent motionEvent) {
+        System.out.println("onSingleTapUp motionEvent: " + motionEvent.getY());
+
+        playerUI.setVisibility(View.VISIBLE);
+        return false;
+    }
+
+    @Override
+    public boolean onScroll(MotionEvent motionEvent, MotionEvent motionEvent1, float v, float v1) {
+        System.out.println("onScroll motionEvent: " + motionEvent.getY());
+        System.out.println("onScroll motionEvent1: " + motionEvent1.getY());
+        System.out.println("onScroll v: " + v);
+        System.out.println("onScroll v1: " + v1);
+
+        return false;
+    }
+
+    @Override
+    public void onLongPress(MotionEvent motionEvent) {
+        System.out.println("onLongPress motionEvent: " + motionEvent.getY());
+    }
+
+    @Override
+    public boolean onFling(MotionEvent motionEvent, MotionEvent motionEvent1, float v, float v1) {
+        System.out.println("onFling motionEvent: " + motionEvent.getY());
+        System.out.println("onFling motionEvent1: " + motionEvent1.getY());
+        System.out.println("onFling v: " + v);
+        System.out.println("onFling v1: " + v1);
+
+        // gestureVolumeLabel.setVisibility(View.GONE);
+
+        return false;
     }
 
     public static native int initBasicPlayer(Object surface);

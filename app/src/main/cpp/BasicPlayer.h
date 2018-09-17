@@ -26,6 +26,7 @@
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
 #include "libswresample/swresample.h"
+//#include "testh.h"
 
 // return: == 0 - success
 //          < 0 - error code

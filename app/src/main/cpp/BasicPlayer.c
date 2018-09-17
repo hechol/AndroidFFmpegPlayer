@@ -196,6 +196,7 @@ void packet_queue_end(PacketQueue *q)
 
 void createEngine(ANativeWindow* nativeWindow) {
 
+    //int t = getTest(2);
     //char *org_name = (char *)malloc(sizeof(char));
     //free(org_name);
     //char *org_name2 = (char *)malloc(sizeof(char)*25);
@@ -257,12 +258,10 @@ int openMovie(const char filePath[])
 {
     int video_index, audio_index;
 
-
+    //avformat_open_input(NULL, NULL, NULL, NULL);
 
     if (avformat_open_input(&is->ic, filePath, NULL, NULL) != 0)
         return -2;
-
-
 
     if (avformat_find_stream_info(is->ic, 0) < 0)
         return -3;
@@ -497,8 +496,6 @@ int video_thread(void *arg)
         else
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
-
-
 
         if (got_picture) {
 
