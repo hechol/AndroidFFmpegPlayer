@@ -17,6 +17,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,6 +34,8 @@ public class PlayVideo extends Activity implements
     LinearLayout playerUI;;
 
     GestureDetector mDetector;
+
+    Button auto_repeat;
 
     static {
         System.loadLibrary("native-lib");
@@ -56,6 +59,8 @@ public class PlayVideo extends Activity implements
 
         playerUI = (LinearLayout) findViewById(R.id.player_ui);
         playerUI.setVisibility(View.GONE);
+
+        auto_repeat = (Button) findViewById(R.id.auto_repeat);
 
         mHandler = new Handler();
 
@@ -90,6 +95,11 @@ public class PlayVideo extends Activity implements
         return super.onTouchEvent(event);
     }
 
+    final int auto_repeat_off= 0;
+    final int auto_repeat_select_A = 1;
+    final int auto_repeat_on = 2;
+    int auto_repeat_state = auto_repeat_off;
+
     public void mOnClick(View v) {
         switch (v.getId()) {
             case R.id.close:
@@ -100,6 +110,27 @@ public class PlayVideo extends Activity implements
                 break;
             case R.id.right:
                 StreamSeek(10);
+                break;
+            case R.id.auto_repeat:
+                if(auto_repeat_state == auto_repeat_off){
+                    auto_repeat_state = auto_repeat_select_A;
+                    auto_repeat.setText("auto_repeat_A");
+                    changeAutoRepeatState(auto_repeat_select_A);
+                }else if(auto_repeat_state == auto_repeat_select_A){
+                    if(getAutoRepeatStartPosition() < getCurrentPosition()){
+                        auto_repeat_state = auto_repeat_on;
+                        auto_repeat.setText("auto_repeat_AB");
+                        changeAutoRepeatState(auto_repeat_on);
+                    }else{
+                        auto_repeat_state = auto_repeat_off;
+                        auto_repeat.setText("auto_repeat");
+                        changeAutoRepeatState(auto_repeat_off);
+                    }
+                }else if(auto_repeat_state == auto_repeat_on){
+                    auto_repeat_state = auto_repeat_off;
+                    auto_repeat.setText("auto_repeat");
+                    changeAutoRepeatState(auto_repeat_off);
+                }
                 break;
         }
     }
@@ -213,11 +244,14 @@ public class PlayVideo extends Activity implements
 
     public static native int initBasicPlayer(Object surface);
     public static native int openMovie(String filePath);
-    public static native int renderFrame(Bitmap bitmap);
     public static native int getMovieWidth();
     public static native int getMovieHeight();
     public static native void close();
     public static native void StreamSeek(double incr);
+
+    public static native void changeAutoRepeatState(int state);
+    public static native double getAutoRepeatStartPosition();
+    public static native double getCurrentPosition();
 }
 
 

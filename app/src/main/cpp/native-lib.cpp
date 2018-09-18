@@ -5,6 +5,8 @@ extern "C" {
 #include "BasicPlayer.h"
 }
 
+extern VideoState *is;
+
 extern "C" JNIEXPORT jstring JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_stringFromJNI(
         JNIEnv *env,
         jobject /* this */) {
@@ -50,22 +52,6 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
     return result;
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_renderFrame(JNIEnv *env, jobject thiz, jobject bitmap)
-{
-    void *pixels;
-    int result = 0;
-
-    if ((result = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0)
-        return result;
-
-    //decodeFrame();
-    copyPixels((uint8_t*)pixels);
-
-    AndroidBitmap_unlockPixels(env, bitmap);
-
-    return result;
-}
-
 extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_getMovieWidth(JNIEnv *env, jobject thiz)
 {
     return getWidth();
@@ -84,4 +70,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
 extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_StreamSeek(JNIEnv *env, jobject thiz, jdouble incr)
 {
     stream_seek( incr);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_changeAutoRepeatState(JNIEnv *env, jobject thiz, jint state){
+    changeAutoRepeatState(state);
+    return;
+}
+extern "C" JNIEXPORT jdouble JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_getAutoRepeatStartPosition(JNIEnv *env, jobject thiz){
+    return getAutoRepeatStartPts();
+}
+extern "C" JNIEXPORT jdouble JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_getCurrentPosition(JNIEnv *env, jobject thiz){
+    return get_master_clock(is);
 }

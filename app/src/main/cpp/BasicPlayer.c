@@ -50,16 +50,6 @@ static const SLEnvironmentalReverbSettings reverbSettings =
 static void *buffer;
 static size_t bufferSize;
 
-//AVFormatContext *gFormatCtx = NULL;
-
-//AVCodecContext *gVideoCodecCtx = NULL;
-//AVCodecContext *gAudioCodecCtx = NULL;
-//AVCodec *gVideoCodec = NULL;
-//AVCodec *gAudioCodec = NULL;
-//int gVideoStreamIdx = -1;
-//int gAudioStreamIdx = -1;
-
-//AVFrame *gFrame = NULL;
 AVFrame *gFrameRGB = NULL;
 
 struct SwsContext *gImgConvertCtx = NULL;
@@ -72,6 +62,18 @@ int audio_data_size = 0;
 
 VideoState      *is;
 
+int auto_repeat_off= 0;
+int auto_repeat_select_A = 1;
+int auto_repeat_on = 2;
+int auto_repeat_on_wait = 3;
+int auto_repeat_on_working = 4;
+
+int auto_repeat_state = 0;
+
+double autoRepeatStartPts = 0;
+double autoRepeatEndPts= 10;
+
+int autoRepeatState = 0;
 
 /* packet queue handling */
 void packet_queue_init(PacketQueue *q)
@@ -292,10 +294,6 @@ int openMovie(const char filePath[])
 
     pthread_create(&parse_tid, NULL, decode_thread, is->nativeWindow);
 
-//    for(;;){
-//        decodeFrame(nativeWindow);
-//    }
-
     return 0;
 }
 
@@ -349,7 +347,7 @@ void video_refresh_timer()
 
     if (is->pictq_size == 0) {
         /* if no picture, need to wait */
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "error: schedule_refresh 1");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "error: schedule_refresh 1");
         schedule_refresh(1);
     }else{
         vp = &is->pictq[is->pictq_rindex];
@@ -381,11 +379,11 @@ int refresh_thread(void *arg)
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
             pthread_mutex_unlock(&refresh_mutex);
 
-            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "frame refresh start: %d", pNode->data);
+            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh start: %d", pNode->data);
 
             usleep(pNode->data * 1000);
 
-            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "frame refresh end: %d", pNode->data);
+            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh end: %d", pNode->data);
 
             video_refresh_timer();
         }else{
@@ -411,12 +409,12 @@ int queue_picture(AVFrame *src_frame, double pts){
     pthread_mutex_lock(&is->pictq_mutex);
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE&&
            !is->videoq.abort_request) {
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait start");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture wait start");
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
     }
     pthread_mutex_unlock(&is->pictq_mutex);
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture wait end");
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture wait end");
 
     if (is->videoq.abort_request)
         return -1;
@@ -466,7 +464,7 @@ int queue_picture(AVFrame *src_frame, double pts){
 
     pthread_mutex_unlock(&is->pictq_mutex);
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture render end");
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture render end");
 }
 
 int video_thread(void *arg)
@@ -598,6 +596,28 @@ int decode_thread(void* arge)
     for(;;){
         if (is->abort_request)
             break;
+
+        if(autoRepeatState == auto_repeat_on_wait){
+
+            if((get_master_clock(is) - getAutoRepeatEndPts()) > 0){
+                autoRepeatState = auto_repeat_on_working;
+                double gap =  getAutoRepeatEndPts() - getAutoRepeatStartPts();
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_working");
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
+                stream_seek(-gap);
+            }else{
+                //int a = getAutoRepeatEndPts();
+                //int b = get_master_clock(is);
+            }
+        }else if(autoRepeatState == auto_repeat_on_working){
+            if((getAutoRepeatEndPts() - get_master_clock(is)) > 0){
+                autoRepeatState = auto_repeat_on_wait;
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_wait");
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "get_master_clock: %f", get_master_clock(is));
+            }
+        }
 
         if(is->seek_req) {
             int stream_index= -1;
@@ -956,4 +976,28 @@ void closeAudio(){
         engineObject = NULL;
         engineEngine = NULL;
     }
+}
+
+
+
+void changeAutoRepeatState(int state){
+    autoRepeatState = state;
+
+    if(autoRepeatState == auto_repeat_off){
+        autoRepeatStartPts = 0;
+        autoRepeatEndPts = 10;
+    }else if(autoRepeatState == auto_repeat_select_A){
+        autoRepeatStartPts = get_master_clock(is);
+    }else if(autoRepeatState == auto_repeat_on){
+        autoRepeatState = auto_repeat_on_wait;
+        autoRepeatEndPts = get_master_clock(is);
+    }
+}
+
+double getAutoRepeatStartPts(){
+    return autoRepeatStartPts;
+}
+
+double getAutoRepeatEndPts(){
+    return autoRepeatEndPts;
 }

@@ -106,4 +106,9 @@ double get_master_clock(VideoState *is);
 void stream_seek(double rel);
 int video_thread(void *arg);
 int refresh_thread(void *arg);
+
+void changeAutoRepeatState(int state);
+double getAutoRepeatStartPts();
+double getAutoRepeatEndPts();
+
 #endif
