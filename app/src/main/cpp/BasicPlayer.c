@@ -507,11 +507,6 @@ int video_thread(void *arg)
     return 0;
 }
 
-void* audio_thread(void *t){
-    bqPlayerCallback(bqPlayerBufferQueue, NULL);
-    return NULL;
-}
-
 int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow)
 {
     AVFormatContext *ic = is->ic;
@@ -647,7 +642,9 @@ int decode_thread(void* arge)
             is->seek_req = 0;
         }
 
-        if(av_read_frame(is->ic, &packet) >= 0) {
+        if((is->videoq.nb_packets > 20) && (is->audioq.nb_packets > 20)){
+
+        }else if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
                 packet_queue_put(&is->videoq, &packet);
             }else if(packet.stream_index == is->audio_stream){
@@ -656,7 +653,7 @@ int decode_thread(void* arge)
                 av_free_packet(&packet);
             }
         }else{
-            printf("abc");
+            //printf("abc");
         }
     }
 
