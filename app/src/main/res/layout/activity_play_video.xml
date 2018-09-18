@@ -27,11 +27,11 @@
             android:gravity="center"
             >
             <Button
-                android:id="@+id/play"
+                android:id="@+id/pause"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:onClick="mOnClick"
-                android:text="Play"
+                android:text="Pause"
                 />
             <Button
                 android:id="@+id/close"

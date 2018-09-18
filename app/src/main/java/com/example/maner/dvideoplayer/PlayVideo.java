@@ -35,7 +35,10 @@ public class PlayVideo extends Activity implements
 
     GestureDetector mDetector;
 
+    Button pause;
     Button auto_repeat;
+
+    boolean isPause = false;
 
     static {
         System.loadLibrary("native-lib");
@@ -61,6 +64,7 @@ public class PlayVideo extends Activity implements
         playerUI.setVisibility(View.GONE);
 
         auto_repeat = (Button) findViewById(R.id.auto_repeat);
+        pause = (Button) findViewById(R.id.pause);
 
         mHandler = new Handler();
 
@@ -110,6 +114,16 @@ public class PlayVideo extends Activity implements
                 break;
             case R.id.right:
                 StreamSeek(10);
+                break;
+            case R.id.pause:
+                clickPause();
+                if(!isPause) {
+                    isPause = true;
+                    pause.setText("play");
+                }else{
+                    isPause = false;
+                    pause.setText("pause");
+                }
                 break;
             case R.id.auto_repeat:
                 if(auto_repeat_state == auto_repeat_off){
@@ -252,6 +266,7 @@ public class PlayVideo extends Activity implements
     public static native void changeAutoRepeatState(int state);
     public static native double getAutoRepeatStartPosition();
     public static native double getCurrentPosition();
+    public static native void clickPause();
 }
 
 

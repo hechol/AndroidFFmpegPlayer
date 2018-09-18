@@ -76,9 +76,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
     changeAutoRepeatState(state);
     return;
 }
+
 extern "C" JNIEXPORT jdouble JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_getAutoRepeatStartPosition(JNIEnv *env, jobject thiz){
     return getAutoRepeatStartPts();
 }
+
 extern "C" JNIEXPORT jdouble JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_getCurrentPosition(JNIEnv *env, jobject thiz){
     return get_master_clock(is);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_clickPause(JNIEnv *env, jobject thiz){
+    stream_pause(is);
 }

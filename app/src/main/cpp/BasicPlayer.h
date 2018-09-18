@@ -111,4 +111,6 @@ void changeAutoRepeatState(int state);
 double getAutoRepeatStartPts();
 double getAutoRepeatEndPts();
 
+void stream_pause(VideoState *is);
+
 #endif

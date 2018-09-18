@@ -207,8 +207,10 @@ void createEngine(ANativeWindow* nativeWindow) {
     //free(gVideoBuffer2);
 
     is = av_mallocz(sizeof(VideoState));
+
     is->ready = 0;
     is->abort_request = 0;
+    is->paused = 0;
 
     is->pictq_rindex = 0;
     is->pictq_windex = 0;
@@ -477,6 +479,9 @@ int video_thread(void *arg)
     AVFrame *frame= avcodec_alloc_frame();
 
     for(;;) {
+        while (is->paused ) {
+            usleep(1);
+        }
 
         if (packet_queue_get(&is->videoq, pkt, 1) < 0)
             break;
@@ -592,6 +597,10 @@ int decode_thread(void* arge)
         if (is->abort_request)
             break;
 
+        if (is->paused){
+            continue;
+        }
+
         if(autoRepeatState == auto_repeat_on_wait){
 
             if((get_master_clock(is) - getAutoRepeatEndPts()) > 0){
@@ -705,9 +714,8 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
     for (;;)
     {
         if (is->audioq.abort_request) {
-            return ;
+            return;
         }
-
         if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0)
             return;
 
@@ -832,7 +840,11 @@ void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample)
 double get_video_clock(VideoState *is) {
     double delta;
 
-    delta = (av_gettime() - is->video_current_pts_time) / 1000000.0;
+    if (is->paused) {
+        delta = 0;
+    } else {
+        delta = (av_gettime() - is->video_current_pts_time) / 1000000.0;
+    }
     return is->video_current_pts + delta;
 }
 
@@ -975,8 +987,6 @@ void closeAudio(){
     }
 }
 
-
-
 void changeAutoRepeatState(int state){
     autoRepeatState = state;
 
@@ -997,4 +1007,18 @@ double getAutoRepeatStartPts(){
 
 double getAutoRepeatEndPts(){
     return autoRepeatEndPts;
+}
+
+/* pause or resume the video */
+void stream_pause(VideoState *is)
+{
+    is->paused = !is->paused;
+    if (!is->paused) {
+        is->video_current_pts = get_video_clock(is);
+        is->frame_timer += (av_gettime() - is->video_current_pts_time) / 1000000.0;
+
+        (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PLAYING);
+    }else{
+        (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PAUSED);
+    }
 }
