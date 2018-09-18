@@ -104,6 +104,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 double get_master_clock(VideoState *is);
 void stream_seek(double rel);
+void stream_seek_to(double seekPos);
 int video_thread(void *arg);
 int refresh_thread(void *arg);
 

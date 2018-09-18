@@ -864,6 +864,21 @@ void stream_seek(double rel) {
     }
 }
 
+void stream_seek_to(double seekPos) {
+    double coefficient = 100.0f;
+    double coefficient2 = (is->ic->duration / coefficient);
+    seekPos = seekPos * coefficient2;
+
+    //double test = 250 / 100;
+    //double test2 = 250 / 100.0f;
+
+    if(!is->seek_req) {
+        is->seek_pos = seekPos;
+        is->seek_flags = 0;
+        is->seek_req = 1;
+    }
+}
+
 void do_exit(void)
 {
     is->abort_request = 1;

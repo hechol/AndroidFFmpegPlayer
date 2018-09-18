@@ -67,9 +67,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
     closePlayer();
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_StreamSeek(JNIEnv *env, jobject thiz, jdouble incr)
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_streamSeek(JNIEnv *env, jobject thiz, jdouble incr)
 {
-    stream_seek( incr);
+    stream_seek(incr);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_seekTo(JNIEnv *env, jobject thiz, jdouble seekPos)
+{
+    stream_seek_to(seekPos);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_changeAutoRepeatState(JNIEnv *env, jobject thiz, jint state){

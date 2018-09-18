@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -37,6 +38,8 @@ public class PlayVideo extends Activity implements
 
     Button pause;
     Button auto_repeat;
+
+    SeekBar seekBar;
 
     boolean isPause = false;
 
@@ -65,6 +68,25 @@ public class PlayVideo extends Activity implements
 
         auto_repeat = (Button) findViewById(R.id.auto_repeat);
         pause = (Button) findViewById(R.id.pause);
+
+        seekBar = (SeekBar) findViewById(R.id.seek_bar);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekTo(seekBar.getProgress());
+            }
+        });
 
         mHandler = new Handler();
 
@@ -110,10 +132,10 @@ public class PlayVideo extends Activity implements
                 playerUI.setVisibility(View.GONE);
                 break;
             case R.id.left:
-                StreamSeek(-10);
+                streamSeek(-10);
                 break;
             case R.id.right:
-                StreamSeek(10);
+                streamSeek(10);
                 break;
             case R.id.pause:
                 clickPause();
@@ -261,7 +283,8 @@ public class PlayVideo extends Activity implements
     public static native int getMovieWidth();
     public static native int getMovieHeight();
     public static native void close();
-    public static native void StreamSeek(double incr);
+    public static native void streamSeek(double incr);
+    public static native void seekTo(double seekPos);
 
     public static native void changeAutoRepeatState(int state);
     public static native double getAutoRepeatStartPosition();
@@ -270,57 +293,3 @@ public class PlayVideo extends Activity implements
 }
 
 
-
-/*
-class MoviePlayView extends View {
-
-    // Used to load the 'native-lib' library on application startup.
-    static {
-        System.loadLibrary("native-lib");
-    }
-
-    private Bitmap mBitmap;
-
-    public MoviePlayView(Context context, String filename) {
-        super(context);
-
-        if (initBasicPlayer() < 0) {
-            Toast.makeText(context, "CPU doesn't support NEON", Toast.LENGTH_LONG).show();
-
-            ((Activity)context).finish();
-        }
-
-        initBasicPlayer();
-
-        int openResult = openMovie(filename);
-        if (openResult < 0) {
-            Toast.makeText(context, "Open Movie Error: " + openResult, Toast.LENGTH_LONG).show();
-
-            ((Activity)context).finish();
-        }
-        else
-            mBitmap = Bitmap.createBitmap(getMovieWidth(), getMovieHeight(), Bitmap.Config.RGB_565);
-    }
-
-    boolean isReady = true;
-    @Override
-    protected void onDraw(Canvas canvas) {
-        if(isReady == true) {
-            isReady = true;
-            //renderFrame(mBitmap);
-            //canvas.drawBitmap(mBitmap, 0, 0, null);
-
-            invalidate();
-            //isReady = true;
-        }
-    }
-
-
-    public static native int initBasicPlayer();
-    public static native int openMovie(String filePath);
-    public static native int renderFrame(Bitmap bitmap);
-    public static native int getMovieWidth();
-    public static native int getMovieHeight();
-    public static native void closeMovie();
-}
-*/
