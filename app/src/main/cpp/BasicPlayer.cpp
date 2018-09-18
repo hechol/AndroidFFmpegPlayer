@@ -10,8 +10,13 @@
 
 
 #include "BasicPlayer.h"
-#include "linkedqueue.h"
+
 #include <unistd.h>
+
+
+
+JavaVM *g_VM;
+JNIEnv *g_env;
 
 pthread_t parse_tid;
 pthread_t refresh_tid;
@@ -119,7 +124,7 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     if (pkt!=&flush_pkt && av_dup_packet(pkt) < 0)
         return -1;
 
-    pkt1 = av_malloc(sizeof(AVPacketList));
+    pkt1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
     if (!pkt1)
         return -1;
     pkt1->pkt = *pkt;
@@ -206,7 +211,7 @@ void createEngine(ANativeWindow* nativeWindow) {
     //uint8_t *gVideoBuffer2 = (uint8_t*)(malloc(sizeof(uint8_t) * 5));
     //free(gVideoBuffer2);
 
-    is = av_mallocz(sizeof(VideoState));
+    is = (VideoState*)av_mallocz(sizeof(VideoState));
 
     is->ready = 0;
     is->abort_request = 0;
@@ -218,7 +223,7 @@ void createEngine(ANativeWindow* nativeWindow) {
     is->pictq_size = 0;
 
     av_init_packet(&flush_pkt);
-    flush_pkt.data= "FLUSH";
+    flush_pkt.data= (uint8_t *)"FLUSH";
 
     AVFormatContext *ic = avformat_alloc_context();
 
@@ -367,8 +372,10 @@ void video_refresh_timer()
     }
 }
 
-int refresh_thread(void *arg)
+void* refresh_thread(void *arg)
 {
+    //g_VM->AttachCurrentThread(&g_env, NULL);
+
     for(;;){
         if(is->abort_request){
             deleteLinkedQueue(refreshTimeQueue);
@@ -444,7 +451,7 @@ int queue_picture(AVFrame *src_frame, double pts){
     rect.bottom = 500;
     ANativeWindow_lock(is->nativeWindow, &windowBuffer, &rect);
 
-       uint8_t *dst = windowBuffer.bits;
+       uint8_t *dst = (uint8_t *)windowBuffer.bits;
        int dstStride = windowBuffer.stride * 4;
        uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
        int srcStride = gFrameRGB->linesize[0];
@@ -467,9 +474,11 @@ int queue_picture(AVFrame *src_frame, double pts){
     pthread_mutex_unlock(&is->pictq_mutex);
 
     __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture render end");
+
+    return 0;
 }
 
-int video_thread(void *arg)
+void* video_thread(void *arg)
 {
     AVPacket pkt1, *pkt = &pkt1;
     int got_picture = 0;
@@ -579,14 +588,13 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             //pthread_create(&is->audio_tid, NULL, audio_thread, NULL);
             //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
             break;
-        default:
-            break;
     }
+    return 0;
 }
 
-int decode_thread(void* arge)
+void* decode_thread(void* arge)
 {
-    ANativeWindow* nativeWindow = arge;
+    ANativeWindow* nativeWindow = (ANativeWindow*) arge;
     int frameFinished = 0;
     AVPacket packet;
 
@@ -666,7 +674,7 @@ int decode_thread(void* arge)
         }
     }
 
-    return -1;
+    return NULL;
 }
 
 void copyPixels(uint8_t *pixels)
@@ -1027,6 +1035,14 @@ double getAutoRepeatEndPts(){
 /* pause or resume the video */
 void stream_pause(VideoState *is)
 {
+    if(is == NULL){
+        return;
+    }
+
+    if(bqPlayerPlay == NULL){
+        return;
+    }
+
     is->paused = !is->paused;
     if (!is->paused) {
         is->video_current_pts = get_video_clock(is);

@@ -1,11 +1,11 @@
-#include <jni.h>
+
 #include <string>
 
-extern "C" {
 #include "BasicPlayer.h"
-}
 
 extern VideoState *is;
+extern JavaVM *g_VM;
+extern JNIEnv *g_env;
 
 extern "C" JNIEXPORT jstring JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_stringFromJNI(
         JNIEnv *env,
@@ -35,6 +35,9 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
     av_register_all();
     ANativeWindow* nativeWindow = ANativeWindow_fromSurface(env, surface);
     createEngine(nativeWindow);
+
+    JNIEnv *g_env = env;
+    env->GetJavaVM(&g_VM);
     return 0;
 }
 

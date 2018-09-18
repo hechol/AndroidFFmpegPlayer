@@ -205,7 +205,20 @@ public class PlayVideo extends Activity implements
 
     @Override
     public void onBackPressed() {
+        super.onBackPressed();
         close();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        clickPause();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        clickPause();
     }
 
     @Override

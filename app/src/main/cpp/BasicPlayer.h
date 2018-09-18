@@ -22,10 +22,16 @@
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 
-#include "libavcodec/avcodec.h"
-#include "libavformat/avformat.h"
-#include "libswscale/swscale.h"
-#include "libswresample/swresample.h"
+#include <jni.h>
+
+extern "C" {
+    #include "libavcodec/avcodec.h"
+    #include "libavformat/avformat.h"
+    #include "libswscale/swscale.h"
+    #include "libswresample/swresample.h"
+    #include "linkedqueue.h"
+}
+
 //#include "testh.h"
 
 // return: == 0 - success
@@ -88,7 +94,7 @@ typedef struct VideoState {
 } VideoState;
 
 int openMovie(const char filePath[]);
-int decode_thread(void* arge);
+void* decode_thread(void* arge);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();
@@ -105,13 +111,15 @@ void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 double get_master_clock(VideoState *is);
 void stream_seek(double rel);
 void stream_seek_to(double seekPos);
-int video_thread(void *arg);
-int refresh_thread(void *arg);
+void* video_thread(void *arg);
+void* refresh_thread(void *arg);
 
 void changeAutoRepeatState(int state);
 double getAutoRepeatStartPts();
 double getAutoRepeatEndPts();
 
 void stream_pause(VideoState *is);
+
+int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow);
 
 #endif
