@@ -38,3 +38,7 @@ apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다.
 그리고 https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 
 
 적용하면 더 높은 프레임이 나올 것입니다.
+
+==========================================================
+
+mail: maner9@gmail.com, maner9@hanmail.net
