@@ -13,6 +13,14 @@ ffmpeg library는 ffmpeg-0.11.5버전을 linux환경에서 build했습니다.
 개발에 가장 많이 참고했던 코드는 
 ffmpeg-0.5.15의 ffplay.c 코드 입니다.
 
+ffmpeg library build는 이곳을 참고했습니다.
+
+http://dev2.prompt.co.kr/77
+
+http://gamdekong.tistory.com/106
+
+http://blog.naver.com/PostView.nhn?blogId=just4u78&logNo=220628698165&categoryNo=0&parentCategoryNo=0&viewDate=&currentPage=1&postListTopCurrentPage=1&from=postView
+
 
 OpenSL 관련 code는 이곳을 참고했습니다.
 
