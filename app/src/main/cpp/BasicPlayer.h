@@ -95,8 +95,12 @@ typedef struct VideoState {
     int64_t         seek_pos;
 } VideoState;
 
-int openMovie(const char filePath[]);
+// thread
+void* decode_thread(void* arge);
+void* video_thread(void *arg);
+void* refresh_thread(void *arg);
 
+int openMovie(const char filePath[]);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();
@@ -105,7 +109,6 @@ void closePlayer();
 void stream_close(VideoState *is);
 void stream_component_close(VideoState *is, int stream_index);
 void closeAudio();
-
 void createEngine();
 void createBufferQueueAudioPlayer(int rate, int channel, int bitsPerSample);
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
@@ -113,19 +116,12 @@ void tbqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context);
 double get_master_clock(VideoState *is);
 void stream_seek(double rel);
 void stream_seek_to(double seekPos);
-
-// thread
-void* decode_thread(void* arge);
-void* video_thread(void *arg);
-void* refresh_thread(void *arg);
-
 void changeAutoRepeatState(int state);
 double getAutoRepeatStartPts();
 double getAutoRepeatEndPts();
-
 void stream_pause(VideoState *is);
-
 void setWindow(ANativeWindow* nativeWindow);
 int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow);
+void render(ANativeWindow* nativeWindow);
 
 #endif

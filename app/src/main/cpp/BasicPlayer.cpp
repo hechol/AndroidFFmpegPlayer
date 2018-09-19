@@ -1,19 +1,7 @@
-/*
- * Main functions of BasicPlayer
- * 2011-2011 Jaebong Lee (novaever@gmail.com)
- *
- * BasicPlayer is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- */
-
 
 #include "BasicPlayer.h"
 
 #include <unistd.h>
-
-
 
 JavaVM *g_VM;
 JNIEnv *g_env;
@@ -286,29 +274,34 @@ void setWindow(ANativeWindow* nativeWindow){
             ANativeWindow_setBuffersGeometry(nativeWindow, enc->width, enc->height,
                                              WINDOW_FORMAT_RGBA_8888);
 
-            ANativeWindow_Buffer windowBuffer;
-            ARect rect;
-            rect.left = 0;
-            rect.right = 500;
-            rect.top = 0;
-            rect.bottom = 500;
-            ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
-
-            uint8_t *dst = (uint8_t *)windowBuffer.bits;
-            int dstStride = windowBuffer.stride * 4;
-            uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
-            int srcStride = gFrameRGB->linesize[0];
-
-            int h;
-            for (h = 0; h < is->video_st->codec->height; h++) {
-                memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-            }
-
-            ANativeWindow_unlockAndPost(nativeWindow);
+            render(nativeWindow);
         }
     }
 
 
+}
+
+void render(ANativeWindow* nativeWindow){
+
+    ANativeWindow_Buffer windowBuffer;
+    ARect rect;
+    rect.left = 0;
+    rect.right = 500;
+    rect.top = 0;
+    rect.bottom = 500;
+    ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
+
+    uint8_t *dst = (uint8_t *)windowBuffer.bits;
+    int dstStride = windowBuffer.stride * 4;
+    uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+    int srcStride = gFrameRGB->linesize[0];
+
+    int h;
+    for (h = 0; h < is->video_st->codec->height; h++) {
+        memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+    }
+
+    ANativeWindow_unlockAndPost(nativeWindow);
 }
 
 
@@ -496,25 +489,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
     pthread_mutex_lock(&is->pause_mutex);
 
     if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
-        ANativeWindow_Buffer windowBuffer;
-        ARect rect;
-        rect.left = 0;
-        rect.right = 500;
-        rect.top = 0;
-        rect.bottom = 500;
-        ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
-
-        uint8_t *dst = (uint8_t *) windowBuffer.bits;
-        int dstStride = windowBuffer.stride * 4;
-        uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
-        int srcStride = gFrameRGB->linesize[0];
-
-        int h;
-        for (h = 0; h < is->video_st->codec->height; h++) {
-            memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-        }
-
-        ANativeWindow_unlockAndPost(is->nativeWindow);
+        render(is->nativeWindow);
     }
 
     pthread_mutex_unlock(&is->pause_mutex);
