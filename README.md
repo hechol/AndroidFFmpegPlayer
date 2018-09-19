@@ -1,8 +1,8 @@
 # AndroidFFmpegPlayer
 
 sound: OpenSL
-video: android ANativeWindow
 
+video: android ANativeWindow
 
 ffmpeg library는 ffmpeg-0.11.5버전을 build했습니다. 
 
