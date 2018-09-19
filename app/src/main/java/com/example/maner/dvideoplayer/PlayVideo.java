@@ -92,23 +92,39 @@ public class PlayVideo extends Activity implements
 
         mDetector = new GestureDetector(this, this);
         mDetector.setIsLongpressEnabled(false);
+
+
     }
 
+    boolean isNotCreated = true;
     @Override
     public void surfaceCreated(final SurfaceHolder surfaceHolderaa) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                initBasicPlayer(surfaceHolderaa.getSurface());
-                int openResult = openMovie(fileName);
-                mHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        checkRatio();
-                    }
-                });
-            }
-        }).start();
+
+
+        if(isNotCreated) {
+            isNotCreated = false;
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    initBasicPlayer();
+                    setWindow(surfaceHolderaa.getSurface());
+                    int openResult = openMovie(fileName);
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            checkRatio();
+                        }
+                    });
+                }
+            }).start();
+        }else{
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    setWindow(surfaceHolderaa.getSurface());
+                }
+            });
+        }
     }
 
     @Override
@@ -212,13 +228,18 @@ public class PlayVideo extends Activity implements
     @Override
     public void onPause() {
         super.onPause();
-        clickPause();
+
+        if(!isPause) {
+            isPause = true;
+            pause.setText("play");
+            clickPause();
+        }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        clickPause();
+        //clickPause();
     }
 
     @Override
@@ -291,7 +312,8 @@ public class PlayVideo extends Activity implements
         return false;
     }
 
-    public static native int initBasicPlayer(Object surface);
+    public static native int initBasicPlayer();
+    public static native void setWindow(Object surface);
     public static native int openMovie(String filePath);
     public static native int getMovieWidth();
     public static native int getMovieHeight();

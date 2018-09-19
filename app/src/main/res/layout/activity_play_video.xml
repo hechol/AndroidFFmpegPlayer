@@ -26,13 +26,7 @@
             android:layout_centerInParent="true"
             android:gravity="center"
             >
-            <Button
-                android:id="@+id/pause"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:onClick="mOnClick"
-                android:text="Pause"
-                />
+
             <Button
                 android:id="@+id/close"
                 android:layout_width="match_parent"
@@ -40,6 +34,15 @@
                 android:onClick="mOnClick"
                 android:text="Close"
                 />
+
+            <Button
+                android:id="@+id/pause"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:onClick="mOnClick"
+                android:text="Pause"
+                />
+
             <LinearLayout
                 android:orientation="horizontal"
                 android:layout_width="match_parent"

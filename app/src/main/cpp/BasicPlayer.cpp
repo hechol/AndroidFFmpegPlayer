@@ -201,7 +201,7 @@ void packet_queue_end(PacketQueue *q)
     pthread_cond_destroy(&q->cond);
 }
 
-void createEngine(ANativeWindow* nativeWindow) {
+void createEngine() {
 
     //int t = getTest(2);
     //char *org_name = (char *)malloc(sizeof(char));
@@ -210,6 +210,8 @@ void createEngine(ANativeWindow* nativeWindow) {
     //free(org_name2);
     //uint8_t *gVideoBuffer2 = (uint8_t*)(malloc(sizeof(uint8_t) * 5));
     //free(gVideoBuffer2);
+
+    avformat_network_init();
 
     is = (VideoState*)av_mallocz(sizeof(VideoState));
 
@@ -227,7 +229,7 @@ void createEngine(ANativeWindow* nativeWindow) {
 
     AVFormatContext *ic = avformat_alloc_context();
 
-    is->nativeWindow = nativeWindow;
+
     is->ic = ic;
 
     SLresult result;
@@ -261,6 +263,53 @@ void createEngine(ANativeWindow* nativeWindow) {
     }
 }
 
+void setWindow(ANativeWindow* nativeWindow){
+
+
+    is->nativeWindow = nativeWindow;
+
+    if(is != NULL) {
+        if(is->ic->nb_streams > 0) {
+            int i;
+            int video_index = 0;
+            AVCodecContext *enc;
+
+            for (i = 0; i < is->ic->nb_streams; i++) {
+                AVCodecContext *enc = is->ic->streams[i]->codec;
+
+                if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
+                    video_index = i;
+                }
+            }
+            enc = is->ic->streams[video_index]->codec;
+
+            ANativeWindow_setBuffersGeometry(nativeWindow, enc->width, enc->height,
+                                             WINDOW_FORMAT_RGBA_8888);
+
+            ANativeWindow_Buffer windowBuffer;
+            ARect rect;
+            rect.left = 0;
+            rect.right = 500;
+            rect.top = 0;
+            rect.bottom = 500;
+            ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
+
+            uint8_t *dst = (uint8_t *)windowBuffer.bits;
+            int dstStride = windowBuffer.stride * 4;
+            uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+            int srcStride = gFrameRGB->linesize[0];
+
+            int h;
+            for (h = 0; h < is->video_st->codec->height; h++) {
+                memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+            }
+
+            ANativeWindow_unlockAndPost(nativeWindow);
+        }
+    }
+
+
+}
 
 
 int openMovie(const char filePath[])
@@ -374,7 +423,7 @@ void video_refresh_timer()
 
 void* refresh_thread(void *arg)
 {
-    //g_VM->AttachCurrentThread(&g_env, NULL);
+    g_VM->AttachCurrentThread(&g_env, NULL);
 
     for(;;){
         if(is->abort_request){
@@ -400,23 +449,22 @@ void* refresh_thread(void *arg)
 
             usleep(1);
         }
-
-
     }
+    g_VM->DetachCurrentThread();
 
     return NULL;
 }
 
-int queue_picture(AVFrame *src_frame, double pts){
+int queue_picture(AVFrame *src_frame, double pts) {
 
-    if((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)){
+    if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
         video_refresh_timer();
         bqPlayerCallback(bqPlayerBufferQueue, NULL);
     }
 
     pthread_mutex_lock(&is->pictq_mutex);
-    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE&&
+    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE &&
            !is->videoq.abort_request) {
         __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture wait start");
         pthread_cond_wait(&is->pictq_cond, &is->pictq_mutex);
@@ -431,7 +479,6 @@ int queue_picture(AVFrame *src_frame, double pts){
     VideoPicture *vp;
     vp = &is->pictq[is->pictq_windex];
 
-    ANativeWindow_Buffer windowBuffer;
 
     gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
                                           is->video_st->codec->width,
@@ -444,24 +491,31 @@ int queue_picture(AVFrame *src_frame, double pts){
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
               is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
 
-    ARect rect;
-    rect.left = 0;
-    rect.right = 500;
-    rect.top = 0;
-    rect.bottom = 500;
-    ANativeWindow_lock(is->nativeWindow, &windowBuffer, &rect);
+    pthread_mutex_lock(&is->pause_mutex);
 
-       uint8_t *dst = (uint8_t *)windowBuffer.bits;
-       int dstStride = windowBuffer.stride * 4;
-       uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
-       int srcStride = gFrameRGB->linesize[0];
+    if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
+        ANativeWindow_Buffer windowBuffer;
+        ARect rect;
+        rect.left = 0;
+        rect.right = 500;
+        rect.top = 0;
+        rect.bottom = 500;
+        ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
 
-       int h;
-       for (h = 0; h < is->video_st->codec->height; h++) {
-          memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
-       }
+        uint8_t *dst = (uint8_t *) windowBuffer.bits;
+        int dstStride = windowBuffer.stride * 4;
+        uint8_t *src = (uint8_t *) (gFrameRGB->data[0]);
+        int srcStride = gFrameRGB->linesize[0];
 
-       ANativeWindow_unlockAndPost(is->nativeWindow);
+        int h;
+        for (h = 0; h < is->video_st->codec->height; h++) {
+            memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+        }
+
+        ANativeWindow_unlockAndPost(is->nativeWindow);
+    }
+
+    pthread_mutex_unlock(&is->pause_mutex);
 
     vp->pts = pts;
 
@@ -480,6 +534,8 @@ int queue_picture(AVFrame *src_frame, double pts){
 
 void* video_thread(void *arg)
 {
+    g_VM->AttachCurrentThread(&g_env, NULL);
+
     AVPacket pkt1, *pkt = &pkt1;
     int got_picture = 0;
 
@@ -518,6 +574,8 @@ void* video_thread(void *arg)
     }
 
     av_free(frame);
+
+    g_VM->DetachCurrentThread();
     return 0;
 }
 
@@ -594,7 +652,9 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
 void* decode_thread(void* arge)
 {
-    ANativeWindow* nativeWindow = (ANativeWindow*) arge;
+    g_VM->AttachCurrentThread(&g_env, NULL);
+
+    ANativeWindow* nativeWindow = is->nativeWindow;
     int frameFinished = 0;
     AVPacket packet;
 
@@ -673,6 +733,8 @@ void* decode_thread(void* arge)
             //printf("abc");
         }
     }
+
+    g_VM->DetachCurrentThread();
 
     return NULL;
 }
@@ -930,6 +992,8 @@ void stream_close(VideoState *is)
     pthread_mutex_destroy(&is->pictq_mutex);
     pthread_cond_destroy(&is->pictq_cond);
 
+    pthread_mutex_destroy(&is->pause_mutex);
+
     av_free(is);
 }
 
@@ -1043,7 +1107,10 @@ void stream_pause(VideoState *is)
         return;
     }
 
+    pthread_mutex_lock(&is->pause_mutex);
+
     is->paused = !is->paused;
+
     if (!is->paused) {
         is->video_current_pts = get_video_clock(is);
         is->frame_timer += (av_gettime() - is->video_current_pts_time) / 1000000.0;
@@ -1052,4 +1119,6 @@ void stream_pause(VideoState *is)
     }else{
         (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PAUSED);
     }
+
+    pthread_mutex_unlock(&is->pause_mutex);
 }
