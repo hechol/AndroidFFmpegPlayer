@@ -35,8 +35,6 @@ apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다.
 
 이때에도 사운드는 밀리지 않고 출력되어서 사운드와 영상의 싱크가 맞지  됩니다.
 
-이부분은 개선할 예정입니다.
-
 그리고 https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 
 
 적용하면 더 높은 프레임이 나올 것입니다.
