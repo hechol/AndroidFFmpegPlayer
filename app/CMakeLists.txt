@@ -8,25 +8,26 @@ cmake_minimum_required(VERSION 3.4.1)
 set(ffmpeg_DIR ${CMAKE_SOURCE_DIR}/src/main/cpp/ffmpeg)
 include_directories(${ffmpeg_DIR}/${ANDROID_ABI}/include)
 
-add_library(avutil SHARED IMPORTED)
-set_target_properties(avutil PROPERTIES IMPORTED_LOCATION
-        ${ffmpeg_DIR}/${ANDROID_ABI}/libavutil-51.so)
+add_library(avcodec SHARED IMPORTED)
+set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION
+         ${ffmpeg_DIR}/${ANDROID_ABI}/libavcodec-57.so)
 
 add_library(avformat SHARED IMPORTED)
 set_target_properties(avformat PROPERTIES IMPORTED_LOCATION
-         ${ffmpeg_DIR}/${ANDROID_ABI}/libavformat-54.so)
+         ${ffmpeg_DIR}/${ANDROID_ABI}/libavformat-57.so)
 
-add_library(avcodec SHARED IMPORTED)
-set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION
-         ${ffmpeg_DIR}/${ANDROID_ABI}/libavcodec-54.so)
-
-add_library(swscale SHARED IMPORTED)
-set_target_properties(swscale PROPERTIES IMPORTED_LOCATION
-        ${ffmpeg_DIR}/${ANDROID_ABI}/libswscale-2.so)
+add_library(avutil SHARED IMPORTED)
+set_target_properties(avutil PROPERTIES IMPORTED_LOCATION
+        ${ffmpeg_DIR}/${ANDROID_ABI}/libavutil-55.so)
 
 add_library(swresample SHARED IMPORTED)
 set_target_properties(swresample PROPERTIES IMPORTED_LOCATION
-        ${ffmpeg_DIR}/${ANDROID_ABI}/libswresample-0.so)
+        ${ffmpeg_DIR}/${ANDROID_ABI}/libswresample-2.so)
+
+add_library(swscale SHARED IMPORTED)
+set_target_properties(swscale PROPERTIES IMPORTED_LOCATION
+        ${ffmpeg_DIR}/${ANDROID_ABI}/libswscale-4.so)
+
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.

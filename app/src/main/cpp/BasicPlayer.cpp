@@ -455,7 +455,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
     if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
         video_refresh_timer();
-        bqPlayerCallback(bqPlayerBufferQueue, NULL);
+        //bqPlayerCallback(bqPlayerBufferQueue, NULL);
     }
 
     pthread_mutex_lock(&is->pictq_mutex);
@@ -480,7 +480,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
                                           is->video_st->codec->height,
                                           is->video_st->codec->pix_fmt,
                                           is->video_st->codec->width,
-                                          is->video_st->codec->height, PIX_FMT_RGBA,
+                                          is->video_st->codec->height, AV_PIX_FMT_RGBA,
                                           SWS_BICUBIC, NULL, NULL, NULL);
 
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
@@ -518,7 +518,7 @@ void* video_thread(void *arg)
 
     //schedule_refresh(1);
 
-    AVFrame *frame= avcodec_alloc_frame();
+    AVFrame *frame= av_frame_alloc();
 
     for(;;) {
 
@@ -589,15 +589,15 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             //if (gFrame == NULL)
             //    return -7;
 
-            gFrameRGB = avcodec_alloc_frame();
+            gFrameRGB = av_frame_alloc();
             if (gFrameRGB == NULL)
                 return -8;
 
             // video init
 
-            gPictureSize = avpicture_get_size(PIX_FMT_RGBA, enc->width, enc->height);
+            gPictureSize = avpicture_get_size(AV_PIX_FMT_RGBA, enc->width, enc->height);
             gVideoBuffer = (uint8_t*)(malloc(sizeof(uint8_t) * gPictureSize));
-            avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, PIX_FMT_RGBA, enc->width, enc->height);
+            avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, AV_PIX_FMT_RGBA, enc->width, enc->height);
 
             ANativeWindow_setBuffersGeometry(nativeWindow,  enc->width, enc->height, WINDOW_FORMAT_RGBA_8888);
             ANativeWindow_Buffer windowBuffer;
@@ -622,7 +622,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             int rate = enc->sample_rate;
             int channel = enc->channels;
 
-            audioFrame = avcodec_alloc_frame();
+            audioFrame = av_frame_alloc();
 
             createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
 
