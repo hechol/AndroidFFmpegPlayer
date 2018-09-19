@@ -39,6 +39,6 @@ apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다.
 
 1프레임 이상 밀릴 시에 프레임을 스킵하는 방법을 사용해서 개선할수도 있을 것 같습니다.
 
-그리고 https://d2.naver.com/helloworld/8794 에 소개된 fragment shader를 사용한 최적화를 
+그리고 https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 
 
 적용하면 더 높은 프레임이 나올 것입니다.
