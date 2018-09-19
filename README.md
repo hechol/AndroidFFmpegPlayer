@@ -4,7 +4,7 @@ sound: OpenSL
 
 video: android ANativeWindow
 
-
+ndk: Cmake
 
 
 ffmpeg library는 ffmpeg-0.11.5버전을 build했습니다. 
@@ -32,9 +32,13 @@ apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다.
 개선이 필요한 부분
 
 고화질영상을 플레이 시에 기기의 cpu에 따라서 영상이 밀리는 현상이 발생합니다.
+
 이때에도 사운드는 밀리지 않고 출력되어서 싱크가 맞지 않게 됩니다.
+
 싱크 처리 로직을 ffmpeg-0.6.7의 ffplay.c에 사용된 방법을 써서 개선할 수도 있고
+
 1프레임 이상 밀릴 시에 프레임을 스킵하는 방법을 사용해서 개선할수도 있을 것 같습니다.
 
 그리고 https://d2.naver.com/helloworld/8794 에 소개된 fragment shader를 사용한 최적화를 
+
 적용하면 더 높은 프레임이 나올 것입니다.
