@@ -428,6 +428,8 @@ void* refresh_thread(void *arg)
     for(;;){
         if(is->abort_request){
             deleteLinkedQueue(refreshTimeQueue);
+
+            g_VM->DetachCurrentThread();
             return NULL;
         }
 
@@ -544,8 +546,14 @@ void* video_thread(void *arg)
     AVFrame *frame= avcodec_alloc_frame();
 
     for(;;) {
-        while (is->paused ) {
+
+        if(is->abort_request){
+            break;
+        }
+
+        if(is->paused ) {
             usleep(1);
+            continue;
         }
 
         if (packet_queue_get(&is->videoq, pkt, 1) < 0)
