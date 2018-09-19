@@ -58,7 +58,7 @@ public class PlayVideo extends Activity implements
 
         Intent intent = getIntent();
         fileName = intent.getStringExtra("file_name");
-        //fileName = "http://192.168.0.4/im.mp4";
+        fileName = "http://192.168.0.4/im.mp4";
 
         mPreview = (SurfaceView) findViewById(R.id.surfaceView);
         SurfaceHolder surfaceHolder = mPreview.getHolder();
