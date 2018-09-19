@@ -22,3 +22,5 @@ https://blog.csdn.net/Glouds/article/details/50944309
 android ANativeWindow 관련 code는 이곳을 참고했습니다.
 
 https://blog.csdn.net/Glouds/article/details/50937266
+
+apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다. 
