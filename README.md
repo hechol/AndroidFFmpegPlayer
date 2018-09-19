@@ -12,13 +12,13 @@ ffmpeg library는 ffmpeg-0.11.5버전을 build했습니다.
 ffmpeg-0.5.15의 ffplay.c 코드 입니다.
 
 
-OpenSL 관련 code는 이 site들을 참고했습니다.
+OpenSL 관련 code는 이곳을 참고했습니다.
 
 https://github.com/googlesamples/android-ndk/tree/master/native-audio
 
 https://blog.csdn.net/Glouds/article/details/50944309 
 
 
-android ANativeWindow 관련 code는 이 site들을 참고했습니다.
+android ANativeWindow 관련 code는 이곳을 참고했습니다.
 
 https://blog.csdn.net/Glouds/article/details/50937266
