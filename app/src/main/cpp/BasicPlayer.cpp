@@ -454,7 +454,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
-        video_refresh_timer();
+        //video_refresh_timer();
         //bqPlayerCallback(bqPlayerBufferQueue, NULL);
     }
 
@@ -657,9 +657,9 @@ void* decode_thread(void* arge)
             if((get_master_clock(is) - getAutoRepeatEndPts()) > 0){
                 autoRepeatState = auto_repeat_on_working;
                 double gap =  getAutoRepeatEndPts() - getAutoRepeatStartPts();
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_working");
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "autoRepeatState == auto_repeat_on_working");
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
                 stream_seek(-gap);
             }else{
                 //int a = getAutoRepeatEndPts();
@@ -668,9 +668,9 @@ void* decode_thread(void* arge)
         }else if(autoRepeatState == auto_repeat_on_working){
             if((getAutoRepeatEndPts() - get_master_clock(is)) > 0){
                 autoRepeatState = auto_repeat_on_wait;
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_wait");
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "get_master_clock: %f", get_master_clock(is));
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "autoRepeatState == auto_repeat_on_wait");
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "get_master_clock: %f", get_master_clock(is));
             }
         }
 
@@ -707,9 +707,10 @@ void* decode_thread(void* arge)
         }else if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
                 packet_queue_put(&is->videoq, &packet);
-                __android_log_print(ANDROID_LOG_INFO, "CHK", "packet_queue_put video_stream : %d", is->videoq.nb_packets);
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "packet_queue_put video_stream : %d", is->videoq.nb_packets);
             }else if(packet.stream_index == is->audio_stream){
                 packet_queue_put(&is->audioq, &packet);
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "packet_queue_put audio_stream: %d", is->audioq.nb_packets);
             }else {
                 av_free_packet(&packet);
             }
@@ -765,13 +766,18 @@ AVPacket audioPacket;
 
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
 
+    __android_log_print(ANDROID_LOG_INFO, "CHK", "bqPlayerCallback: %d", is->audioq.nb_packets);
+
     for (;;)
     {
         if (is->audioq.abort_request) {
             return;
         }
-        if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0)
+        if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0){
             return;
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "CHK", "packet_queue_get audioPacket: %d", is->audioq.nb_packets);
 
         AVCodecContext *dec = is->audio_st->codec;
 
