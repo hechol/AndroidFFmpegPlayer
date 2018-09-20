@@ -702,11 +702,12 @@ void* decode_thread(void* arge)
             is->seek_req = 0;
         }
 
-        if((is->videoq.nb_packets > 20) && (is->audioq.nb_packets > 20)){
+        if((is->videoq.nb_packets < -20) && (is->audioq.nb_packets < -20)){
 
         }else if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
                 packet_queue_put(&is->videoq, &packet);
+                __android_log_print(ANDROID_LOG_INFO, "CHK", "packet_queue_put video_stream : %d", is->videoq.nb_packets);
             }else if(packet.stream_index == is->audio_stream){
                 packet_queue_put(&is->audioq, &packet);
             }else {
