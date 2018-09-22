@@ -7,7 +7,7 @@ video: android ANativeWindow
 ndk build: Cmake
 
 
-ffmpeg library는 ffmpeg-0.11.5버전을 linux환경에서 build했습니다. 
+ffmpeg library는 ffmpeg-3.3.8버전을 linux환경에서 build했습니다. 
 
 
 개발에 가장 많이 참고했던 코드는 
