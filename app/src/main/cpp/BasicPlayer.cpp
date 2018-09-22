@@ -454,8 +454,8 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
-        //video_refresh_timer();
-        //bqPlayerCallback(bqPlayerBufferQueue, NULL);
+        video_refresh_timer();
+        bqPlayerCallback(bqPlayerBufferQueue, NULL);
     }
 
     pthread_mutex_lock(&is->pictq_mutex);
@@ -792,7 +792,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
         if (frameFinished) {
             audio_data_size = av_samples_get_buffer_size(
                     audioFrame->linesize, dec->channels,
-                    audioFrame->nb_samples, dec->sample_fmt, 1);
+                    audioFrame->nb_samples, AV_SAMPLE_FMT_S16, 1);
 
             if (audio_data_size > outputBufferSize) {
                 audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
