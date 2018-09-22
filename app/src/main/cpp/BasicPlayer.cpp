@@ -480,7 +480,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
                                           is->video_st->codec->height,
                                           is->video_st->codec->pix_fmt,
                                           is->video_st->codec->width,
-                                          is->video_st->codec->height, PIX_FMT_RGBA,
+                                          is->video_st->codec->height, AV_PIX_FMT_RGBA,
                                           SWS_BICUBIC, NULL, NULL, NULL);
 
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
@@ -518,7 +518,7 @@ void* video_thread(void *arg)
 
     //schedule_refresh(1);
 
-    AVFrame *frame= avcodec_alloc_frame();
+    AVFrame *frame= av_frame_alloc();
 
     for(;;) {
 
@@ -589,15 +589,15 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             //if (gFrame == NULL)
             //    return -7;
 
-            gFrameRGB = avcodec_alloc_frame();
+            gFrameRGB = av_frame_alloc();
             if (gFrameRGB == NULL)
                 return -8;
 
             // video init
 
-            gPictureSize = avpicture_get_size(PIX_FMT_RGBA, enc->width, enc->height);
+            gPictureSize = avpicture_get_size(AV_PIX_FMT_RGBA, enc->width, enc->height);
             gVideoBuffer = (uint8_t*)(malloc(sizeof(uint8_t) * gPictureSize));
-            avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, PIX_FMT_RGBA, enc->width, enc->height);
+            avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, AV_PIX_FMT_RGBA, enc->width, enc->height);
 
             ANativeWindow_setBuffersGeometry(nativeWindow,  enc->width, enc->height, WINDOW_FORMAT_RGBA_8888);
             ANativeWindow_Buffer windowBuffer;
@@ -622,7 +622,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             int rate = enc->sample_rate;
             int channel = enc->channels;
 
-            audioFrame = avcodec_alloc_frame();
+            audioFrame = av_frame_alloc();
 
             createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
 
@@ -657,9 +657,9 @@ void* decode_thread(void* arge)
             if((get_master_clock(is) - getAutoRepeatEndPts()) > 0){
                 autoRepeatState = auto_repeat_on_working;
                 double gap =  getAutoRepeatEndPts() - getAutoRepeatStartPts();
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_working");
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "autoRepeatState == auto_repeat_on_working");
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
                 stream_seek(-gap);
             }else{
                 //int a = getAutoRepeatEndPts();
@@ -668,9 +668,9 @@ void* decode_thread(void* arge)
         }else if(autoRepeatState == auto_repeat_on_working){
             if((getAutoRepeatEndPts() - get_master_clock(is)) > 0){
                 autoRepeatState = auto_repeat_on_wait;
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "autoRepeatState == auto_repeat_on_wait");
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
-                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "get_master_clock: %f", get_master_clock(is));
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "autoRepeatState == auto_repeat_on_wait");
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "getAutoRepeatEndPts: %f", getAutoRepeatEndPts());
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "get_master_clock: %f", get_master_clock(is));
             }
         }
 
@@ -702,13 +702,15 @@ void* decode_thread(void* arge)
             is->seek_req = 0;
         }
 
-        if((is->videoq.nb_packets > 20) && (is->audioq.nb_packets > 20)){
+        if((is->videoq.nb_packets < -20) && (is->audioq.nb_packets < -20)){
 
         }else if(av_read_frame(is->ic, &packet) >= 0) {
             if (packet.stream_index == is->video_stream) {
                 packet_queue_put(&is->videoq, &packet);
+                __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "packet_queue_put video_stream : %d", is->videoq.nb_packets);
             }else if(packet.stream_index == is->audio_stream){
                 packet_queue_put(&is->audioq, &packet);
+                __android_log_print(ANDROID_LOG_DEBUG, "CHK", "packet_queue_put audio_stream: %d", is->audioq.nb_packets);
             }else {
                 av_free_packet(&packet);
             }
@@ -764,13 +766,18 @@ AVPacket audioPacket;
 
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
 
+    __android_log_print(ANDROID_LOG_INFO, "CHK", "bqPlayerCallback: %d", is->audioq.nb_packets);
+
     for (;;)
     {
         if (is->audioq.abort_request) {
             return;
         }
-        if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0)
+        if (packet_queue_get(&is->audioq, &audioPacket, 1) < 0){
             return;
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "CHK", "packet_queue_get audioPacket: %d", is->audioq.nb_packets);
 
         AVCodecContext *dec = is->audio_st->codec;
 
@@ -785,7 +792,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
         if (frameFinished) {
             audio_data_size = av_samples_get_buffer_size(
                     audioFrame->linesize, dec->channels,
-                    audioFrame->nb_samples, dec->sample_fmt, 1);
+                    audioFrame->nb_samples, AV_SAMPLE_FMT_S16, 1);
 
             if (audio_data_size > outputBufferSize) {
                 audioOutputBuffer = (uint8_t *) realloc(audioOutputBuffer,
