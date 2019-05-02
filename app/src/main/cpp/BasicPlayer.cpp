@@ -379,7 +379,7 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
     actual_delay = is->frame_timer - (av_gettime() / 1000000.0);
 
     double store_actual_delay = actual_delay;
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "actual_delay: %f", store_actual_delay);
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "actual_delay: %f", store_actual_delay);
 
     if (actual_delay < 0.010) {
         /* XXX: should skip picture */
@@ -391,7 +391,7 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
     return actual_delay;
 }
 
-bool test_skkip_frame(double frame_current_pts, VideoState *is)
+bool test_skip_frame(double frame_current_pts, VideoState *is)
 {
     double actual_delay, delay;
 
@@ -404,10 +404,10 @@ bool test_skkip_frame(double frame_current_pts, VideoState *is)
     if (actual_delay < 0.0) {
         //is->frame_last_pts = frame_current_pts;
         //is->frame_timer += delay;
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skkip_frame true");
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skip_frame true");
         return true;
     }else{
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skkip_frame false");
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skip_frame false");
         return false;
     }
 }
@@ -438,7 +438,7 @@ void video_refresh_timer()
         pthread_cond_signal(&is->pictq_cond);
         pthread_mutex_unlock(&is->pictq_mutex);
 
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "render start");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render start");
         pthread_mutex_lock(&is->pause_mutex);
 
         if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
@@ -446,7 +446,7 @@ void video_refresh_timer()
         }
 
         pthread_mutex_unlock(&is->pause_mutex);
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "render end");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render end");
     }
 }
 
@@ -525,7 +525,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
 
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "sws_scale start");
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "sws_scale start");
 
     gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
                                           is->video_st->codec->width,
@@ -538,7 +538,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
               is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "sws_scale end");
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "sws_scale end");
 
     /*
     pthread_mutex_lock(&is->pause_mutex);
@@ -611,22 +611,25 @@ void* video_thread(void *arg)
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
 
+        // seek 후 처리될 부분들
         if(is->frame_last_pts < 0){
             is->frame_last_pts = pts;
+            is->frame_timer = av_gettime() / 1000000.0;
         }
 
-        if(test_skkip_frame(pts, is)){
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video skip frame");
+        if(test_skip_frame(pts, is)){
             skip_frame_count++;
             continue;
         }
 
         int ret = 0;
 
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 start");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "avcodec_decode_video2 start");
         //avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
         avcodec_send_packet(is->video_st->codec, pkt);
         ret = avcodec_receive_frame(is->video_st->codec, frame);
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 end");
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "avcodec_decode_video2 end");
 
         if(ret >= 0){
             got_picture = 1;
