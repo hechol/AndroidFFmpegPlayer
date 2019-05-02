@@ -611,6 +611,10 @@ void* video_thread(void *arg)
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
 
+        if(is->frame_last_pts < 0){
+            is->frame_last_pts = pts;
+        }
+
         if(test_skkip_frame(pts, is)){
             skip_frame_count++;
             continue;
@@ -781,6 +785,8 @@ void* decode_thread(void* arge)
 
             // test
             is->seek_req = 0;
+
+            is->frame_last_pts = -1;
         }
 
         if((is->videoq.nb_packets < -20) && (is->audioq.nb_packets < -20)){
