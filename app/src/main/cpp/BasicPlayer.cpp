@@ -358,6 +358,7 @@ void schedule_refresh(int delay)
     pthread_mutex_unlock(&refresh_mutex);
 }
 
+
 double compute_frame_delay(double frame_current_pts, VideoState *is)
 {
     double actual_delay, delay, sync_threshold, ref_clock, diff;
@@ -376,6 +377,10 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
     /* compute the REAL delay (we need to do that to avoid
        long term errors */
     actual_delay = is->frame_timer - (av_gettime() / 1000000.0);
+
+    double store_actual_delay = actual_delay;
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "actual_delay: %f", store_actual_delay);
+
     if (actual_delay < 0.010) {
         /* XXX: should skip picture */
         actual_delay = 0.010;
@@ -384,6 +389,27 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
     }
 
     return actual_delay;
+}
+
+bool test_skkip_frame(double frame_current_pts, VideoState *is)
+{
+    double actual_delay, delay;
+
+    /* compute nominal delay */
+    delay = frame_current_pts - is->frame_last_pts;
+
+    actual_delay = (is->frame_timer + delay) - (av_gettime() / 1000000.0);
+
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "actual_delay: %f", actual_delay);
+    if (actual_delay < 0.0) {
+        //is->frame_last_pts = frame_current_pts;
+        //is->frame_timer += delay;
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skkip_frame true");
+        return true;
+    }else{
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skkip_frame false");
+        return false;
+    }
 }
 
 void video_refresh_timer()
@@ -460,9 +486,12 @@ void* refresh_thread(void *arg)
     return NULL;
 }
 
+int frameTest = 10;
+int skip_frame_count = 0;
+
 int queue_picture(AVFrame *src_frame, double pts) {
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture start");
+
 
     if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
@@ -485,7 +514,18 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     VideoPicture *vp;
     vp = &is->pictq[is->pictq_windex];
+    vp->pts = pts;
 
+    frameTest--;
+    if(frameTest != 0){
+        //return 0;
+    }else{
+        frameTest = 10;
+    }
+
+
+
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "sws_scale start");
 
     gImgConvertCtx = sws_getCachedContext(gImgConvertCtx,
                                           is->video_st->codec->width,
@@ -498,6 +538,8 @@ int queue_picture(AVFrame *src_frame, double pts) {
     sws_scale(gImgConvertCtx, src_frame->data, src_frame->linesize, 0,
               is->video_st->codec->height, gFrameRGB->data, gFrameRGB->linesize);
 
+    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "sws_scale end");
+
     /*
     pthread_mutex_lock(&is->pause_mutex);
 
@@ -507,8 +549,6 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     pthread_mutex_unlock(&is->pause_mutex);
      */
-
-    vp->pts = pts;
 
     if (++is->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE)
         is->pictq_windex = 0;
@@ -520,7 +560,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture render end");
 
-    __android_log_print(ANDROID_LOG_DEBUG, "CHK", "queue_picture end");
+
 
     return 0;
 }
@@ -557,9 +597,12 @@ void* video_thread(void *arg)
             continue;
         }
 
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 start");
-        avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 end");
+        if(skip_frame_count > 0){
+            skip_frame_count--;
+            //continue;
+        }
+
+
 
         double pts;
         if(pkt->dts != AV_NOPTS_VALUE)
@@ -567,6 +610,23 @@ void* video_thread(void *arg)
         else
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
+
+        if(test_skkip_frame(pts, is)){
+            skip_frame_count++;
+            continue;
+        }
+
+        int ret = 0;
+
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 start");
+        //avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
+        avcodec_send_packet(is->video_st->codec, pkt);
+        ret = avcodec_receive_frame(is->video_st->codec, frame);
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "avcodec_decode_video2 end");
+
+        if(ret >= 0){
+            got_picture = 1;
+        }
 
         if (got_picture) {
 
@@ -787,7 +847,7 @@ AVPacket audioPacket;
 
 void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
 
-    __android_log_print(ANDROID_LOG_INFO, "CHK", "bqPlayerCallback: %d", is->audioq.nb_packets);
+    __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "bqPlayerCallback: %d", is->audioq.nb_packets);
 
     for (;;)
     {
@@ -798,7 +858,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
             return;
         }
 
-        __android_log_print(ANDROID_LOG_INFO, "CHK", "packet_queue_get audioPacket: %d", is->audioq.nb_packets);
+        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "packet_queue_get audioPacket: %d", is->audioq.nb_packets);
 
         AVCodecContext *dec = is->audio_st->codec;
 
