@@ -399,9 +399,11 @@ double compute_frame_delay(double frame_current_pts, VideoState *is)
 
     /* compute nominal delay */
     delay = frame_current_pts - is->frame_last_pts;
-    if (delay <= 0 || delay >= 10.0) {
+    //if (delay <= 0 || delay >= 10.0) {
         /* if incorrect delay, use previous one */
-        delay = is->frame_last_delay;
+
+    if (delay <= 0) {
+        delay = 0;
     } else {
         is->frame_last_delay = delay;
     }
@@ -464,7 +466,7 @@ void video_refresh_timer()
     }else{
         vp = &is->pictq[is->pictq_rindex];
 
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "video_pts: %f", is->video_current_pts);
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video_pts: %f", is->video_current_pts);
 
         /* update current video pts */
         is->video_current_pts = vp->pts;
