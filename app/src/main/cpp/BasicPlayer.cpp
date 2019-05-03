@@ -1109,9 +1109,15 @@ void stream_seek(double rel) {
     pos += rel;
     pos = (int64_t)(pos * AV_TIME_BASE);
 
+    is->seek_flags |= AVSEEK_FLAG_ANY;
+
     if(!is->seek_req) {
         is->seek_pos = pos;
-        is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
+
+        is->seek_flags &= ~AVSEEK_FLAG_BACKWARD;
+        if(rel < 0){
+            is->seek_flags |= AVSEEK_FLAG_BACKWARD;
+        }
         is->seek_req = 1;
     }
 }
