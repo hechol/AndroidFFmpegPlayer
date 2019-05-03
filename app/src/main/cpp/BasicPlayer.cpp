@@ -971,7 +971,14 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
 
         int frameFinished = 0;
 
-        avcodec_decode_audio4(dec, audioFrame, &frameFinished, &audioPacket);
+        //avcodec_decode_audio4(dec, audioFrame, &frameFinished, &audioPacket);
+        avcodec_send_packet(is->audio_st->codec, &audioPacket);
+        int ret = avcodec_receive_frame(is->audio_st->codec, audioFrame);
+
+        if(ret >= 0){
+            frameFinished = 1;
+        }
+
         if (frameFinished) {
 
             double pts;
@@ -1098,6 +1105,24 @@ double get_video_clock(VideoState *is) {
         delta = (av_gettime() - is->video_current_pts_time) / 1000000.0;
     }
     return is->video_current_pts + delta;
+}
+
+double get_audio_clock(VideoState *is)
+{
+    /*
+    double pts;
+    int hw_buf_size, bytes_per_sec;
+    pts = is->audio_clock;
+    hw_buf_size = audio_write_get_buf_size(is);
+    bytes_per_sec = 0;
+    if (is->audio_st) {
+        bytes_per_sec = is->audio_st->codec->sample_rate *
+                        2 * is->audio_st->codec->channels;
+    }
+    if (bytes_per_sec)
+        pts -= (double)hw_buf_size / bytes_per_sec;
+    return pts;
+     */
 }
 
 double get_master_clock(VideoState *is) {
