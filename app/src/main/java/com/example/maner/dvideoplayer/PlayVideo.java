@@ -233,6 +233,9 @@ public class PlayVideo extends Activity implements
         if(!isPause) {
             isPause = true;
             pause.setText("play");
+
+            playerUI.setVisibility(View.VISIBLE);
+
             clickPause();
         }
     }
