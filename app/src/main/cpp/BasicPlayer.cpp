@@ -9,7 +9,9 @@ JNIEnv *g_env;
 pthread_t parse_tid;
 pthread_t refresh_tid;
 pthread_t audio_tid;
+pthread_mutex_t video_queue_mutex;
 pthread_mutex_t refresh_mutex;
+pthread_mutex_t refresh_queue_mutex;
 LinkedQueue* refreshTimeQueue;
 
 size_t outputBufferSize;
@@ -359,11 +361,11 @@ void schedule_refresh(int delay)
     QueueNode node;
     node.data = delay;
 
-    pthread_mutex_lock(&refresh_mutex);
+    pthread_mutex_lock(&refresh_queue_mutex);
 
     enqueueLQ(refreshTimeQueue, node);
 
-    pthread_mutex_unlock(&refresh_mutex);
+    pthread_mutex_unlock(&refresh_queue_mutex);
 }
 
 
@@ -412,7 +414,7 @@ bool test_skip_frame(double frame_current_pts, VideoState *is)
     if (actual_delay < 0.0) {
         //is->frame_last_pts = frame_current_pts;
         //is->frame_timer += delay;
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "test_skip_frame true");
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "test_skip_frame true: pts:%f, last_pts%f, actual_delay%f", frame_current_pts, is->frame_last_pts, actual_delay);
         return true;
     }else{
         __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "test_skip_frame false");
@@ -434,6 +436,8 @@ void video_refresh_timer()
         schedule_refresh(1);
     }else{
         vp = &is->pictq[is->pictq_rindex];
+
+        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video_pts: %f", is->video_current_pts);
 
         /* update current video pts */
         is->video_current_pts = vp->pts;
@@ -463,18 +467,21 @@ void* refresh_thread(void *arg)
     g_VM->AttachCurrentThread(&g_env, NULL);
 
     for(;;){
+        pthread_mutex_lock(&refresh_mutex);
+
         if(is->abort_request){
             deleteLinkedQueue(refreshTimeQueue);
 
             g_VM->DetachCurrentThread();
+
+            pthread_mutex_unlock(&refresh_mutex);
             return NULL;
         }
 
-        pthread_mutex_lock(&refresh_mutex);
-
         if (isLinkedQueueEmpty(refreshTimeQueue) == FALSE) {
+            pthread_mutex_lock(&refresh_queue_mutex);
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
-            pthread_mutex_unlock(&refresh_mutex);
+            pthread_mutex_unlock(&refresh_queue_mutex);
 
             __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh start: %d", pNode->data);
 
@@ -484,10 +491,11 @@ void* refresh_thread(void *arg)
 
             video_refresh_timer();
         }else{
-            pthread_mutex_unlock(&refresh_mutex);
-
             usleep(1);
         }
+
+        pthread_mutex_unlock(&refresh_mutex);
+
     }
     g_VM->DetachCurrentThread();
 
@@ -587,22 +595,27 @@ void* video_thread(void *arg)
 
     for(;;) {
 
+        pthread_mutex_lock(&video_queue_mutex);
+
         if(is->abort_request){
+            pthread_mutex_unlock(&video_queue_mutex);
             break;
         }
 
         if(is->paused ) {
             usleep(1);
+            pthread_mutex_unlock(&video_queue_mutex);
             continue;
         }
 
-        // add skip code
-
-        if (packet_queue_get(&is->videoq, pkt, 1) < 0)
+        if (packet_queue_get(&is->videoq, pkt, 1) < 0){
+            pthread_mutex_unlock(&video_queue_mutex);
             break;
+        }
 
         if(pkt->data == flush_pkt.data){
             avcodec_flush_buffers(is->video_st->codec);
+            pthread_mutex_unlock(&video_queue_mutex);
             continue;
         }
 
@@ -621,7 +634,7 @@ void* video_thread(void *arg)
         pts *= av_q2d(is->video_st->time_base);
 
         // seek 후 처리될 부분들
-        if(is->frame_last_pts > pts){
+        if(is->frame_last_pts < 0){
             is->frame_last_pts = pts;
             is->frame_timer = av_gettime() / 1000000.0;
 
@@ -629,15 +642,11 @@ void* video_thread(void *arg)
             //bqPlayerCallback(bqPlayerBufferQueue, NULL);
         }
 
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video_thread:video_before_skip_pts: %f", pts);
-
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "video skip frame");
         if(test_skip_frame(pts, is)){
             skip_frame_count++;
+            pthread_mutex_unlock(&video_queue_mutex);
             continue;
         }
-
-        __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video_thread:video_after_skip_pts: %f", pts);
 
         int ret = 0;
 
@@ -657,6 +666,8 @@ void* video_thread(void *arg)
 
             av_free_packet(pkt);
         }
+
+        pthread_mutex_unlock(&video_queue_mutex);
     }
 
     av_free(frame);
@@ -780,10 +791,23 @@ void* decode_thread(void* arge)
         }
 
         if(is->seek_req) {
+
+            //pthread_mutex_lock(&refresh_mutex);
+            pthread_mutex_lock(&video_queue_mutex);
+
+            //deleteLinkedQueue(refreshTimeQueue);
+
+            pthread_mutex_lock(&is->pictq_mutex);
+            is->pictq_windex = 0;
+            is->pictq_size = 0;
+            pthread_mutex_unlock(&is->pictq_mutex);
+
+            is->frame_last_pts = -1;
+
             int stream_index= -1;
             int64_t seek_target = is->seek_pos;
 
-            stream_index = is->video_stream;
+            stream_index = is->audio_stream;
 
             if(stream_index>=0){
                 seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
@@ -795,8 +819,6 @@ void* decode_thread(void* arge)
                         is->ic->filename);
             }
 
-            is->seek_req = 0;
-
             if (is->audio_stream >= 0) {
                 packet_queue_flush(&is->audioq);
                 packet_queue_put(&is->audioq, &flush_pkt);
@@ -805,6 +827,13 @@ void* decode_thread(void* arge)
                 packet_queue_flush(&is->videoq);
                 packet_queue_put(&is->videoq, &flush_pkt);
             }
+
+            is->seek_req = 0;
+
+            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "seek end");
+
+            //pthread_mutex_unlock(&refresh_mutex);
+            pthread_mutex_unlock(&video_queue_mutex);
 
             //(*bqPlayerBufferQueue)->Clear(bqPlayerBufferQueue);
             //pthread_create(&audio_tid, NULL, audio_thread, NULL);
@@ -909,7 +938,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
             else
                 pts= 0;
             pts *= av_q2d(is->audio_st->time_base);
-            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "video_thread:audio_pts: %f", pts);
+            __android_log_print(ANDROID_LOG_DEBUG, "CHK", "audio_pts: %f", pts);
 
             audio_data_size = av_samples_get_buffer_size(
                     audioFrame->linesize, dec->channels,
