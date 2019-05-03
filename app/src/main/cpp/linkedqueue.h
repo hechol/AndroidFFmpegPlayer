@@ -18,6 +18,7 @@ LinkedQueue* createLinkedQueue();
 int enqueueLQ(LinkedQueue* pQueue, QueueNode element);
 QueueNode* dequeueLQ(LinkedQueue* pQueue);
 QueueNode* peekLQ(LinkedQueue* pQueue);
+void clearLQ(LinkedQueue* pQueue);
 void deleteLinkedQueue(LinkedQueue* pQueue);
 int isLinkedQueueFull(LinkedQueue* pQueue);
 int isLinkedQueueEmpty(LinkedQueue* pQueue);

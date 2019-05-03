@@ -68,6 +68,15 @@ QueueNode* dequeueLQ(LinkedQueue* pQueue)
 	return pReturn;
 }
 
+void clearLQ(LinkedQueue* pQueue) {
+	for (;;) {
+		QueueNode* pReturn = dequeueLQ(pQueue);
+		if(pReturn == NULL){
+			return;
+		}
+	}
+}
+
 QueueNode* peekLQ(LinkedQueue* pQueue)
 {
 	QueueNode* pReturn = NULL;
