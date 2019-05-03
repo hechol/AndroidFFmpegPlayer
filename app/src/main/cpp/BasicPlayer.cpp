@@ -1127,12 +1127,12 @@ void stream_seek_to(double seekPos) {
     double coefficient2 = (is->ic->duration / coefficient);
     seekPos = seekPos * coefficient2;
 
-    //double test = 250 / 100;
-    //double test2 = 250 / 100.0f;
+    is->seek_flags |= AVSEEK_FLAG_ANY;
+
+    is->seek_flags &= ~AVSEEK_FLAG_BACKWARD;
 
     if(!is->seek_req) {
         is->seek_pos = seekPos;
-        is->seek_flags = 0;
         is->seek_req = 1;
     }
 }
