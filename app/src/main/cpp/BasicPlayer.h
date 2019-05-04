@@ -83,8 +83,10 @@ typedef struct VideoState {
     int audio_stream;
 
     double frame_last_pts;
+    double frame_skip_last_pts;
     double frame_last_delay;
     double frame_timer;
+    double frame_skip_timer;
     double          video_current_pts;
     int64_t         video_current_pts_time;
 
@@ -94,6 +96,8 @@ typedef struct VideoState {
     int             seek_req;
     int             seek_flags;
     int64_t         seek_pos;
+
+    double audio_clock;
 } VideoState;
 
 // thread
@@ -124,5 +128,7 @@ void stream_pause(VideoState *is);
 void setWindow(ANativeWindow* nativeWindow);
 int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativeWindow);
 void render(ANativeWindow* nativeWindow);
+
+double get_video_clock(VideoState *is);
 
 #endif
