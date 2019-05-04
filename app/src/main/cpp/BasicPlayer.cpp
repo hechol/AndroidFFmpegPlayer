@@ -712,12 +712,6 @@ void* video_thread(void *arg)
             //bqPlayerCallback(bqPlayerBufferQueue, NULL);
         }
 
-        if(test_skip_frame(pts, is)){
-            skip_frame_count++;
-            pthread_mutex_unlock(&video_queue_mutex);
-            continue;
-        }
-
         int ret = 0;
 
         __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "avcodec_decode_video2 start");
@@ -725,6 +719,12 @@ void* video_thread(void *arg)
         avcodec_send_packet(is->video_st->codec, pkt);
         ret = avcodec_receive_frame(is->video_st->codec, frame);
         __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "avcodec_decode_video2 end");
+
+        if(test_skip_frame(pts, is)){
+            skip_frame_count++;
+            pthread_mutex_unlock(&video_queue_mutex);
+            continue;
+        }
 
         if(ret >= 0){
             got_picture = 1;
