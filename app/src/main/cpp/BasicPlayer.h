@@ -82,6 +82,7 @@ typedef struct VideoState {
     int video_stream;
     int audio_stream;
 
+    bool bSeekState;
     double frame_last_pts;
     double frame_skip_last_pts;
     double frame_last_delay;

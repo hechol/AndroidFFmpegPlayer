@@ -4,7 +4,13 @@
 #include <unistd.h>
 
 JavaVM *g_VM;
-JNIEnv *g_env;
+JNIEnv *refreashJniEnv;
+JNIEnv *videoJniEnv;
+JNIEnv *decodeJniEnv;
+jobject javaObject_PlayCallback;
+jclass javaClass_PlayCallback;
+jmethodID javaMethod_updateClock;
+jmethodID javaMethod_seekEnd;
 
 pthread_t parse_tid;
 pthread_t refresh_tid;
@@ -247,6 +253,8 @@ void createEngine() {
     is->frame_skip_last_pts = 0;
     is->pictq_size = 0;
 
+    is->bSeekState = false;
+
     av_init_packet(&flush_pkt);
     flush_pkt.data= (uint8_t *)"FLUSH";
 
@@ -463,13 +471,13 @@ bool test_skip_frame(double frame_current_pts, VideoState *is)
 
     //__android_log_print(ANDROID_LOG_VERBOSE, "CHK", "actual_delay: %f", actual_delay);
     if(delay <= 0){
-        //__android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+        __android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
         return false;
     }else if (actual_delay < 0.0) {
-        //__android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame yes: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+        __android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame yes: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
         return true;
     }else{
-       //__android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+       __android_log_print(ANDROID_LOG_DEBUG, "skip", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
         return false;
     }
 }
@@ -498,6 +506,7 @@ void video_refresh_timer()
         __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "error: schedule_refresh 1");
         schedule_refresh(1);
     }else{
+
         vp = &is->pictq[is->pictq_rindex];
 
         __android_log_print(ANDROID_LOG_DEBUG, "pts", "video_pts: %f", is->video_current_pts);
@@ -518,6 +527,12 @@ void video_refresh_timer()
 
         if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
             render(is->nativeWindow);
+
+            if(is->bSeekState == true){
+                is->bSeekState = false;
+            }
+
+            refreashJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_updateClock, get_video_clock(is));
         }
 
         pthread_mutex_unlock(&is->pause_mutex);
@@ -527,7 +542,7 @@ void video_refresh_timer()
 
 void* refresh_thread(void *arg)
 {
-    g_VM->AttachCurrentThread(&g_env, NULL);
+    g_VM->AttachCurrentThread(&refreashJniEnv, NULL);
 
     for(;;){
         pthread_mutex_lock(&refresh_mutex);
@@ -553,6 +568,8 @@ void* refresh_thread(void *arg)
             __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh end: %d", pNode->data);
 
             video_refresh_timer();
+
+
         }else{
             usleep(1);
         }
@@ -570,14 +587,14 @@ int skip_frame_count = 0;
 
 int queue_picture(AVFrame *src_frame, double pts) {
 
-
-
+/*
     if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
         is->ready = 1;
         video_refresh_timer();
         bqPlayerCallback(bqPlayerBufferQueue, NULL);
         //pthread_create(&audio_tid, NULL, audio_thread, NULL);
     }
+    */
 
     pthread_mutex_lock(&is->pictq_mutex);
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE &&
@@ -640,7 +657,11 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
     __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture render end");
 
-
+    if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
+        is->ready = 1;
+        schedule_refresh(1);
+        bqPlayerCallback(bqPlayerBufferQueue, NULL);
+    }
 
     return 0;
 }
@@ -649,7 +670,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
 
 void* video_thread(void *arg)
 {
-    g_VM->AttachCurrentThread(&g_env, NULL);
+    g_VM->AttachCurrentThread(&videoJniEnv, NULL);
 
     AVPacket pkt1, *pkt = &pkt1;
     int got_picture = 0;
@@ -822,7 +843,7 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
 void* decode_thread(void* arge)
 {
-    g_VM->AttachCurrentThread(&g_env, NULL);
+    g_VM->AttachCurrentThread(&decodeJniEnv, NULL);
 
     ANativeWindow* nativeWindow = is->nativeWindow;
     int frameFinished = 0;
@@ -905,6 +926,7 @@ void* decode_thread(void* arge)
             }
 
             is->seek_req = 0;
+            is->bSeekState = true;
 
             __android_log_print(ANDROID_LOG_DEBUG, "put", "seek end");
             __android_log_print(ANDROID_LOG_DEBUG, "get", "seek end");
@@ -913,6 +935,8 @@ void* decode_thread(void* arge)
             pthread_mutex_unlock(&video_queue_mutex);
 
             schedule_refresh(1);
+
+            decodeJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_seekEnd);
 
             //(*bqPlayerBufferQueue)->Clear(bqPlayerBufferQueue);
             //pthread_create(&audio_tid, NULL, audio_thread, NULL);

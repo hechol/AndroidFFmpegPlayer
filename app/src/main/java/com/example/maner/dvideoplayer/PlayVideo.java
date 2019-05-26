@@ -1,16 +1,10 @@
 package com.example.maner.dvideoplayer;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
@@ -20,8 +14,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
-import android.widget.TextView;
-import android.widget.Toast;
 
 public class PlayVideo extends Activity implements
         SurfaceHolder.Callback,
@@ -42,6 +34,13 @@ public class PlayVideo extends Activity implements
     SeekBar seekBar;
 
     boolean isPause = false;
+
+    PlayerCallback mPlayerCallback;
+
+    long duration = 0;
+    double progressCoefficient = 0;
+
+    boolean isSeeking = false;
 
     static {
         System.loadLibrary("native-lib");
@@ -80,7 +79,7 @@ public class PlayVideo extends Activity implements
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-
+                isSeeking = true;
             }
 
             @Override
@@ -94,7 +93,7 @@ public class PlayVideo extends Activity implements
         mDetector = new GestureDetector(this, this);
         mDetector.setIsLongpressEnabled(false);
 
-
+        mPlayerCallback = new PlayerCallback(this);
     }
 
     boolean isNotCreated = true;
@@ -104,12 +103,20 @@ public class PlayVideo extends Activity implements
 
         if(isNotCreated) {
             isNotCreated = false;
+
+
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    initBasicPlayer();
+
+                    initBasicPlayer(mPlayerCallback);
                     setWindow(surfaceHolderaa.getSurface());
                     int openResult = openMovie(fileName);
+
+                    duration = getDuration();
+                    double coefficient = 100000000.0;
+                    progressCoefficient = (duration / coefficient);
+
                     mHandler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -227,8 +234,8 @@ public class PlayVideo extends Activity implements
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
+    public void onStop() {
+        super.onStop();
 
         if(!isPause) {
             isPause = true;
@@ -316,7 +323,21 @@ public class PlayVideo extends Activity implements
         return false;
     }
 
-    public static native int initBasicPlayer();
+    public void updateClock(double clock){
+        if(!isSeeking){
+
+            int progressValue = (int)(clock/ progressCoefficient);
+            seekBar.setProgress(progressValue);
+
+            Log.d("jni", "setProgress: " + progressValue);
+        }
+    }
+
+    public void seekEnd(){
+        isSeeking = false;
+    }
+
+    public static native int initBasicPlayer(Object playerCall);
     public static native void setWindow(Object surface);
     public static native int openMovie(String filePath);
     public static native int getMovieWidth();
@@ -328,6 +349,7 @@ public class PlayVideo extends Activity implements
     public static native void changeAutoRepeatState(int state);
     public static native double getAutoRepeatStartPosition();
     public static native double getCurrentPosition();
+    public static native long getDuration();
     public static native void clickPause();
 }
 
