@@ -28,6 +28,7 @@ SwrContext *swr;
 AVFrame *audioFrame;
 
 AVPacket flush_pkt;
+AVPacket end_pkt;
 
 // engine interfaces
 static SLObjectItf engineObject = NULL;
@@ -77,6 +78,8 @@ double autoRepeatEndPts= 10;
 
 int autoRepeatState = 0;
 
+bool end_read_frame = false;
+
 void* audio_thread(void *arg)
 {
     bqPlayerCallback(bqPlayerBufferQueue, NULL);
@@ -123,7 +126,7 @@ void packet_queue_flush(PacketQueue *q)
     pthread_mutex_lock(&q->mutex);
     for(pkt = q->first_pkt; pkt != NULL; pkt = pkt1) {
         pkt1 = pkt->next;
-        av_free_packet(&pkt->pkt);
+        av_packet_unref(&pkt->pkt);
         av_freep(&pkt);
     }
     q->last_pkt = NULL;
@@ -149,7 +152,8 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     pthread_mutex_lock(&q->mutex);
 
     /* duplicate the packet */
-    if (pkt!=&flush_pkt && av_dup_packet(pkt) < 0)
+    AVPacket copy = { 0 };
+    if (pkt!=&flush_pkt && av_packet_ref(&copy, pkt) < 0)
         return -1;
 
     pkt1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
@@ -253,10 +257,15 @@ void createEngine() {
     is->frame_skip_last_pts = 0;
     is->pictq_size = 0;
 
-    is->bSeekState = false;
+    for(int i = 0; i < VIDEO_PICTURE_QUEUE_SIZE; i++){
+        is->pictq[i].isEnd = false;
+    }
 
     av_init_packet(&flush_pkt);
     flush_pkt.data= (uint8_t *)"FLUSH";
+
+    av_init_packet(&end_pkt);
+    end_pkt.data= (uint8_t *)"END";
 
     AVFormatContext *ic = avformat_alloc_context();
 
@@ -343,6 +352,8 @@ void render(ANativeWindow* nativeWindow){
     for (h = 0; h < is->video_st->codec->height; h++) {
         memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
     }
+
+    __android_log_print(ANDROID_LOG_DEBUG, "render", "render srcStride: %d", srcStride);
 
     ANativeWindow_unlockAndPost(nativeWindow);
 }
@@ -495,6 +506,8 @@ bool test_skip_frame2(double frame_current_pts, VideoState *is)
 
 void video_refresh_timer()
 {
+    __android_log_print(ANDROID_LOG_VERBOSE, "video_refresh_timer", "start");
+
     if(is->abort_request){
         return;
     }
@@ -503,41 +516,68 @@ void video_refresh_timer()
 
     if (is->pictq_size == 0) {
         /* if no picture, need to wait */
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "error: schedule_refresh 1");
-        schedule_refresh(1);
+        __android_log_print(ANDROID_LOG_VERBOSE, "video_refresh_timer", "is->pictq_size == 0");
+        schedule_refresh(10);
     }else{
 
         vp = &is->pictq[is->pictq_rindex];
 
-        __android_log_print(ANDROID_LOG_DEBUG, "pts", "video_pts: %f", is->video_current_pts);
+        if(vp->isEnd){
 
-        /* update current video pts */
-        is->video_current_pts = vp->pts;
-        is->video_current_pts_time = av_gettime();
+            /*
+            if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE)
+                is->pictq_rindex = 0;
 
-        schedule_refresh((int)(compute_frame_delay(vp->pts, is) * 1000 + 0.5));
+            pthread_mutex_lock(&is->pictq_mutex);
+            is->pictq_size--;
+            pthread_mutex_unlock(&is->pictq_mutex);
 
-        pthread_mutex_lock(&is->pictq_mutex);
-        is->pictq_size--;
-        pthread_cond_signal(&is->pictq_cond);
-        pthread_mutex_unlock(&is->pictq_mutex);
+            stream_seek_to(0);
 
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render start");
-        pthread_mutex_lock(&is->pause_mutex);
+            schedule_refresh(1);
+             */
+            __android_log_print(ANDROID_LOG_VERBOSE, "video_refresh_timer", "vp->isEnd)");
 
-        if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
-            render(is->nativeWindow);
+        }else {
 
-            if(is->bSeekState == true){
-                is->bSeekState = false;
+            /* update current video pts */
+            is->video_current_pts = vp->pts;
+            is->video_current_pts_time = av_gettime();
+
+            int delay = (compute_frame_delay(vp->pts, is) * 1000 + 0.5);
+
+            __android_log_print(ANDROID_LOG_VERBOSE, "video_refresh_timer", "delay: %d", delay);
+            schedule_refresh(delay);
+
+            /* update queue size and signal for next picture */
+            if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE)
+                is->pictq_rindex = 0;
+
+            pthread_mutex_lock(&is->pictq_mutex);
+            is->pictq_size--;
+            pthread_cond_signal(&is->pictq_cond);
+            pthread_mutex_unlock(&is->pictq_mutex);
+
+            __android_log_print(ANDROID_LOG_DEBUG, "pictq", "pictq_size: %d", is->pictq_size);
+
+            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render start");
+            pthread_mutex_lock(&is->pause_mutex);
+
+            if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
+
+                render(is->nativeWindow);
+
+                refreashJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_updateClock,
+                                               get_video_clock(is));
+
+                __android_log_print(ANDROID_LOG_DEBUG, "video_refresh_timer", "render video_pts: %f", is->video_current_pts);
             }
 
-            refreashJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_updateClock, get_video_clock(is));
+            pthread_mutex_unlock(&is->pause_mutex);
+            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render end");
         }
-
-        pthread_mutex_unlock(&is->pause_mutex);
-        __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "render end");
     }
+
 }
 
 void* refresh_thread(void *arg)
@@ -545,7 +585,9 @@ void* refresh_thread(void *arg)
     g_VM->AttachCurrentThread(&refreashJniEnv, NULL);
 
     for(;;){
+        //__android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "before lock");
         pthread_mutex_lock(&refresh_mutex);
+        //__android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "after lock");
 
         if(is->abort_request){
             deleteLinkedQueue(refreshTimeQueue);
@@ -553,25 +595,28 @@ void* refresh_thread(void *arg)
 
             g_VM->DetachCurrentThread();
 
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "return");
             return NULL;
         }
 
         if (isLinkedQueueEmpty(refreshTimeQueue) == FALSE) {
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "refresh_queue_mutex before lock");
             pthread_mutex_lock(&refresh_queue_mutex);
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "refresh_queue_mutex after lock");
             QueueNode* pNode = dequeueLQ(refreshTimeQueue);
             pthread_mutex_unlock(&refresh_queue_mutex);
 
-            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh start: %d", pNode->data);
-
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "usleep: %d", pNode->data * 1000);
             usleep(pNode->data * 1000);
 
-            __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "frame refresh end: %d", pNode->data);
-
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "before video_refresh_timer");
             video_refresh_timer();
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "after video_refresh_timer");
 
 
         }else{
             usleep(1);
+            __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "usleep");
         }
 
         pthread_mutex_unlock(&refresh_mutex);
@@ -586,15 +631,6 @@ int frameTest = 10;
 int skip_frame_count = 0;
 
 int queue_picture(AVFrame *src_frame, double pts) {
-
-/*
-    if ((is->ready == 0) && (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE)) {
-        is->ready = 1;
-        video_refresh_timer();
-        bqPlayerCallback(bqPlayerBufferQueue, NULL);
-        //pthread_create(&audio_tid, NULL, audio_thread, NULL);
-    }
-    */
 
     pthread_mutex_lock(&is->pictq_mutex);
     while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE &&
@@ -619,8 +655,6 @@ int queue_picture(AVFrame *src_frame, double pts) {
     }else{
         frameTest = 10;
     }
-
-
 
     __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "sws_scale start");
 
@@ -651,9 +685,12 @@ int queue_picture(AVFrame *src_frame, double pts) {
         is->pictq_windex = 0;
 
     pthread_mutex_lock(&is->pictq_mutex);
+
     is->pictq_size++;
 
     pthread_mutex_unlock(&is->pictq_mutex);
+
+    __android_log_print(ANDROID_LOG_DEBUG, "render", "queue_picture pts: %f", pts);
 
     __android_log_print(ANDROID_LOG_VERBOSE, "CHK", "queue_picture render end");
 
@@ -666,7 +703,7 @@ int queue_picture(AVFrame *src_frame, double pts) {
     return 0;
 }
 
-
+bool waitAfterSeek =false;
 
 void* video_thread(void *arg)
 {
@@ -681,39 +718,24 @@ void* video_thread(void *arg)
 
     for(;;) {
 
-        pthread_mutex_lock(&video_queue_mutex);
-
         if(is->abort_request){
-            pthread_mutex_unlock(&video_queue_mutex);
             break;
         }
 
         if(is->paused ) {
             usleep(1);
-            pthread_mutex_unlock(&video_queue_mutex);
             continue;
         }
+
+        pthread_mutex_lock(&video_queue_mutex);
 
         if (packet_queue_get(&is->videoq, pkt, 1) < 0){
 
-            pthread_mutex_unlock(&video_queue_mutex);
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get error");
             break;
         }else{
-            __android_log_print(ANDROID_LOG_DEBUG, "pts", "packet_queue_get video_stream - pts: %f, count: %d", get_video_pts(pkt->dts, is), is->videoq.nb_packets);
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get video_stream - pts: %f, count: %d", get_video_pts(pkt->dts, is), is->videoq.nb_packets);
         }
-
-        if(pkt->data == flush_pkt.data){
-            avcodec_flush_buffers(is->video_st->codec);
-            pthread_mutex_unlock(&video_queue_mutex);
-            continue;
-        }
-
-        if(skip_frame_count > 0){
-            skip_frame_count--;
-            //continue;
-        }
-
-
 
         double pts;
         if(pkt->dts != AV_NOPTS_VALUE)
@@ -722,15 +744,53 @@ void* video_thread(void *arg)
             pts= 0;
         pts *= av_q2d(is->video_st->time_base);
 
-        // seek 후 처리될 부분들
-        if(is->frame_last_pts < 0){
+        if(pkt->data == end_pkt.data){
+
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "end_pkt");
+
+            /*
+            VideoPicture *vp;
+            vp = &is->pictq[is->pictq_windex];
+            vp->isEnd = true;
+
+            if (++is->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE)
+                is->pictq_windex = 0;
+
+            pthread_mutex_lock(&is->pictq_mutex);
+            is->pictq_size++;
+            pthread_mutex_unlock(&is->pictq_mutex);
+
+            pthread_mutex_unlock(&video_queue_mutex);
+             */
+            continue;
+        }
+
+        if(waitAfterSeek){
+            waitAfterSeek = false;
+
+            // seek 후 처리될 부분들
             is->frame_last_pts = pts;
             is->frame_skip_last_pts = pts;
             is->frame_timer = av_gettime() / 1000000.0;
             is->frame_skip_timer = av_gettime() / 1000000.0;
 
-            //(*bqPlayerBufferQueue)->Clear(bqPlayerBufferQueue);
-            //bqPlayerCallback(bqPlayerBufferQueue, NULL);
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "after seek : pts: %f", pts);
+        }
+
+        if(pkt->data == flush_pkt.data){
+
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "flush_pkt");
+            avcodec_flush_buffers(is->video_st->codec);
+
+            waitAfterSeek = true;
+
+            pthread_mutex_unlock(&video_queue_mutex);
+            continue;
+        }
+
+        if(skip_frame_count > 0){
+            skip_frame_count--;
+            //continue;
         }
 
         int ret = 0;
@@ -747,6 +807,10 @@ void* video_thread(void *arg)
             continue;
         }
 
+        if(ret == AVERROR(EINVAL)){
+
+        }
+
         if(ret >= 0){
             got_picture = 1;
         }
@@ -754,6 +818,8 @@ void* video_thread(void *arg)
         if (got_picture) {
 
             queue_picture(frame, pts);
+
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "got_picture");
 
             av_free_packet(pkt);
         }
@@ -853,10 +919,16 @@ void* decode_thread(void* arge)
     ANativeWindow_Buffer windowBuffer;
 
     for(;;){
-        if (is->abort_request)
+
+        //__android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "start");
+
+        if (is->abort_request) {
+            __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->abort_request");
             break;
+        }
 
         if (is->paused){
+            //__android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->paused");
             continue;
         }
 
@@ -884,22 +956,21 @@ void* decode_thread(void* arge)
 
         if(is->seek_req) {
 
-            //pthread_mutex_lock(&refresh_mutex);
             pthread_mutex_lock(&video_queue_mutex);
-
             pthread_mutex_lock(&refresh_mutex);
+            __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "if(is->seek_req) start");
 
             clearLQ(refreshTimeQueue);
 
             pthread_mutex_lock(&is->pictq_mutex);
+            __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "lock pictq_mutex");
+            is->pictq_rindex = 0;
             is->pictq_windex = 0;
             is->pictq_size = 0;
             pthread_mutex_unlock(&is->pictq_mutex);
 
             __android_log_print(ANDROID_LOG_DEBUG, "put", "seek start");
             __android_log_print(ANDROID_LOG_DEBUG, "get", "seek start");
-
-            is->frame_last_pts = -1;
 
             int stream_index= -1;
             int64_t seek_target = is->seek_pos;
@@ -910,8 +981,17 @@ void* decode_thread(void* arge)
                 seek_target= av_rescale_q(seek_target, AV_TIME_BASE_Q,
                                           is->ic->streams[stream_index]->time_base);
             }
+            /*
             if(av_seek_frame(is->ic, stream_index,
                              seek_target, is->seek_flags) < 0) {
+                fprintf(stderr, "%s: error while seeking\n",
+                        is->ic->filename);
+            }
+             */
+
+            if(avformat_seek_file(is->ic, stream_index,
+                                  0, seek_target, seek_target, is->seek_flags) < 0)
+            {
                 fprintf(stderr, "%s: error while seeking\n",
                         is->ic->filename);
             }
@@ -926,10 +1006,11 @@ void* decode_thread(void* arge)
             }
 
             is->seek_req = 0;
-            is->bSeekState = true;
 
             __android_log_print(ANDROID_LOG_DEBUG, "put", "seek end");
             __android_log_print(ANDROID_LOG_DEBUG, "get", "seek end");
+
+            __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "if(is->seek_req) end");
 
             pthread_mutex_unlock(&refresh_mutex);
             pthread_mutex_unlock(&video_queue_mutex);
@@ -938,29 +1019,40 @@ void* decode_thread(void* arge)
 
             decodeJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_seekEnd);
 
-            //(*bqPlayerBufferQueue)->Clear(bqPlayerBufferQueue);
-            //pthread_create(&audio_tid, NULL, audio_thread, NULL);
+            end_read_frame = false;
         }
 
-        if((is->videoq.nb_packets < -20) && (is->audioq.nb_packets < -20)){
+        if(!end_read_frame)
+        {
+          //  __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "av_read_frame(is->ic, &packet)");
 
-        }else if(av_read_frame(is->ic, &packet) >= 0) {
-            if (packet.stream_index == is->video_stream) {
-                packet_queue_put(&is->videoq, &packet);
-                ;
-                __android_log_print(ANDROID_LOG_DEBUG, "put", "packet_queue_put video_stream - pts: %f, count: %d", get_video_pts(packet.dts, is), is->videoq.nb_packets);
+            int ret =  av_read_frame(is->ic, &packet);
 
-            }else if(packet.stream_index == is->audio_stream){
-                packet_queue_put(&is->audioq, &packet);
-                __android_log_print(ANDROID_LOG_DEBUG, "put", "packet_queue_put audio_stream - pts: %f, count: %d", get_audio_pts(packet.dts, is), is->audioq.nb_packets);
+            if(ret >= 0 ){
+                if (packet.stream_index == is->video_stream) {
 
+                    packet_queue_put(&is->videoq, &packet);
+                    __android_log_print(ANDROID_LOG_DEBUG, "put", "packet_queue_put video_stream - pts: %f, count: %d", get_video_pts(packet.dts, is), is->videoq.nb_packets);
 
-            }else {
-                av_free_packet(&packet);
+                }else if(packet.stream_index == is->audio_stream){
+                    packet_queue_put(&is->audioq, &packet);
+                    __android_log_print(ANDROID_LOG_DEBUG, "put", "packet_queue_put audio_stream - pts: %f, count: %d", get_audio_pts(packet.dts, is), is->audioq.nb_packets);
+
+                }else {
+                    av_packet_unref(&packet);
+                    __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "av_read_frame error ");
+                }
+            }else{
+                if(ret == AVERROR_EOF){
+                    if (packet.stream_index == is->video_stream) {
+                        end_read_frame = true;
+                        //packet_queue_put(&is->videoq, &end_pkt);
+                        __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "av_read_frame AVERROR_EOF ");
+                    }
+                }
             }
-        }else{
-            //printf("abc");
         }
+
     }
 
     g_VM->DetachCurrentThread();
@@ -1264,7 +1356,6 @@ void do_exit(void)
 
 void stream_close(VideoState *is)
 {
-    VideoPicture *vp;
     int i;
     /* XXX: use a special url_shutdown call to abort parse cleanly */
 

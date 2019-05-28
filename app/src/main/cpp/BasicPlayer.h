@@ -42,6 +42,7 @@ extern "C" {
 
 typedef struct VideoPicture {
     double pts;
+    bool isEnd;
 } VideoPicture;
 
 typedef struct PacketQueue {
@@ -82,7 +83,6 @@ typedef struct VideoState {
     int video_stream;
     int audio_stream;
 
-    bool bSeekState;
     double frame_last_pts;
     double frame_skip_last_pts;
     double frame_last_delay;
