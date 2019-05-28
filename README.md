@@ -33,7 +33,7 @@ apk 파일은 AndroidFFmpegPlayer/build/ 에 저장되어 있습니다.
 
 
 최적화가 덜 되어서 저사양 기기로 영상을 재생하면 재생이 원할하지 않을 수 있습니다. 
-프레임 스킵 기능이 적용되어 있긴 한데 디코딩 이후의 과정(avcodec_receive_frame 이후의 부분)만 스킵이 됩니다. 
+프레임 스킵 기능이 적용되어 있긴 한데 디코딩 이후의 과정(avcodec_receive_frame 이후의 부분)만 스킵이 됩니다.  
 이 부분을 개선하면 더 좋아질 것입니다. 
 그리고 https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 적용하면 더 높은 프레임이 나올 것입니다.
 
