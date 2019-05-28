@@ -11,6 +11,7 @@ extern jobject javaObject_PlayCallback;
 extern jclass javaClass_PlayCallback;
 extern jmethodID javaMethod_updateClock;
 extern jmethodID javaMethod_seekEnd;
+extern jmethodID javaMethod_movieEnd;
 
 void makeGlobalRef(JNIEnv* pEnv, jobject* pRef) {
     if (*pRef != NULL) {
@@ -55,6 +56,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
 
     javaMethod_updateClock = env->GetMethodID(javaClass_PlayCallback, "updateClock", "(D)V");
     javaMethod_seekEnd = env->GetMethodID(javaClass_PlayCallback, "seekEnd", "()V");
+    javaMethod_movieEnd = env->GetMethodID(javaClass_PlayCallback, "movieEnd", "()V");
 
     av_register_all();
     createEngine();
@@ -132,4 +134,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
 
 extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_update(JNIEnv *env, jobject thiz){
 
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_clearMovie(JNIEnv *env, jobject thiz){
+    clearMovie();
 }

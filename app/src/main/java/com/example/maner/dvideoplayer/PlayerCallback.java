@@ -36,11 +36,19 @@ public class PlayerCallback {
     }
 
     public void seekEnd(){
+        mHandler.post(new Runnable() {
+            public void run() {
+                mPlayVideo.seekEnd();
+            }
+        });
+    }
+
+    public void movieEnd(){
 
         mHandler.post(new Runnable() {
             public void run() {
 
-                mPlayVideo.seekEnd();
+                mPlayVideo.movieEnd();
             }
         });
 

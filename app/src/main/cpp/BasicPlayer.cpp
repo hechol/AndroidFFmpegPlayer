@@ -3,6 +3,8 @@
 
 #include <unistd.h>
 
+ANativeWindow* gNativeWindow;
+
 JavaVM *g_VM;
 JNIEnv *refreashJniEnv;
 JNIEnv *videoJniEnv;
@@ -11,6 +13,7 @@ jobject javaObject_PlayCallback;
 jclass javaClass_PlayCallback;
 jmethodID javaMethod_updateClock;
 jmethodID javaMethod_seekEnd;
+jmethodID javaMethod_movieEnd;
 
 pthread_t parse_tid;
 pthread_t refresh_tid;
@@ -245,32 +248,11 @@ void createEngine() {
 
     avformat_network_init();
 
-    is = (VideoState*)av_mallocz(sizeof(VideoState));
-
-    is->ready = 0;
-    is->abort_request = 0;
-    is->paused = 0;
-
-    is->pictq_rindex = 0;
-    is->pictq_windex = 0;
-    is->frame_last_pts = 0;
-    is->frame_skip_last_pts = 0;
-    is->pictq_size = 0;
-
-    for(int i = 0; i < VIDEO_PICTURE_QUEUE_SIZE; i++){
-        is->pictq[i].isEnd = false;
-    }
-
     av_init_packet(&flush_pkt);
     flush_pkt.data= (uint8_t *)"FLUSH";
 
     av_init_packet(&end_pkt);
     end_pkt.data= (uint8_t *)"END";
-
-    AVFormatContext *ic = avformat_alloc_context();
-
-
-    is->ic = ic;
 
     SLresult result;
 
@@ -306,8 +288,9 @@ void createEngine() {
 void setWindow(ANativeWindow* nativeWindow){
 
 
-    is->nativeWindow = nativeWindow;
+    gNativeWindow = nativeWindow;
 
+    /*
     if(is != NULL) {
         if(is->ic->nb_streams > 0) {
             int i;
@@ -323,13 +306,14 @@ void setWindow(ANativeWindow* nativeWindow){
             }
             enc = is->ic->streams[video_index]->codec;
 
-            ANativeWindow_setBuffersGeometry(nativeWindow, enc->width, enc->height,
+            ANativeWindow_setBuffersGeometry(ntiveWindow, enc->width, enc->height,
                                              WINDOW_FORMAT_RGBA_8888);
 
-            render(nativeWindow);
+            render(ntiveWindow);
         }
-    }
 
+    }
+    */
 
 }
 
@@ -341,7 +325,7 @@ void render(ANativeWindow* nativeWindow){
     rect.right = 500;
     rect.top = 0;
     rect.bottom = 500;
-    ANativeWindow_lock(is->nativeWindow, &windowBuffer, NULL);
+    ANativeWindow_lock(nativeWindow, &windowBuffer, NULL);
 
     uint8_t *dst = (uint8_t *)windowBuffer.bits;
     int dstStride = windowBuffer.stride * 4;
@@ -358,18 +342,45 @@ void render(ANativeWindow* nativeWindow){
     ANativeWindow_unlockAndPost(nativeWindow);
 }
 
+char gFilePath[1024];
 
 int openMovie(const char filePath[])
 {
+    int size = sizeof(gFilePath);
+    av_strlcpy(gFilePath, filePath, size);
+
+    is = (VideoState*)av_mallocz(sizeof(VideoState));
+
+    is->ready = 0;
+    is->abort_request = 0;
+    is->paused = 0;
+
+    is->pictq_rindex = 0;
+    is->pictq_windex = 0;
+    is->frame_last_pts = 0;
+    is->frame_skip_last_pts = 0;
+    is->pictq_size = 0;
+
+    end_read_frame = false;
+
+    for(int i = 0; i < VIDEO_PICTURE_QUEUE_SIZE; i++){
+        is->pictq[i].isEnd = false;
+    }
+
+    AVFormatContext *ic = avformat_alloc_context();
+    is->ic = ic;
+
     int video_index, audio_index;
 
     //avformat_open_input(NULL, NULL, NULL, NULL);
 
-    if (avformat_open_input(&is->ic, filePath, NULL, NULL) != 0)
+    if (avformat_open_input(&is->ic, filePath, NULL, NULL) != 0){
         return -2;
+    }
 
-    if (avformat_find_stream_info(is->ic, 0) < 0)
+    if (avformat_find_stream_info(is->ic, 0) < 0){
         return -3;
+    }
 
     int i;
     for (i = 0; i < is->ic->nb_streams; i++) {
@@ -388,14 +399,14 @@ int openMovie(const char filePath[])
     }
 
     if (video_index >= 0) {
-        stream_component_open(is, video_index, is->nativeWindow);
+        stream_component_open(is, video_index, gNativeWindow);
     }
 
     refreshTimeQueue = createLinkedQueue();
 
     pthread_create(&refresh_tid, NULL, refresh_thread, NULL);
 
-    pthread_create(&parse_tid, NULL, decode_thread, is->nativeWindow);
+    pthread_create(&parse_tid, NULL, decode_thread, gNativeWindow);
 
     return 0;
 }
@@ -523,8 +534,8 @@ void video_refresh_timer()
         vp = &is->pictq[is->pictq_rindex];
 
         if(vp->isEnd){
+            vp->isEnd = false;
 
-            /*
             if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE)
                 is->pictq_rindex = 0;
 
@@ -532,10 +543,14 @@ void video_refresh_timer()
             is->pictq_size--;
             pthread_mutex_unlock(&is->pictq_mutex);
 
+            /*
             stream_seek_to(0);
-
             schedule_refresh(1);
              */
+
+            //openMovie(gFilePath);
+            refreashJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_movieEnd);
+
             __android_log_print(ANDROID_LOG_VERBOSE, "video_refresh_timer", "vp->isEnd)");
 
         }else {
@@ -565,7 +580,7 @@ void video_refresh_timer()
 
             if (!is->paused) { // background로 전환될 때 crash를 막기 위한 부분
 
-                render(is->nativeWindow);
+                render(gNativeWindow);
 
                 refreashJniEnv->CallVoidMethod(javaObject_PlayCallback, javaMethod_updateClock,
                                                get_video_clock(is));
@@ -585,9 +600,9 @@ void* refresh_thread(void *arg)
     g_VM->AttachCurrentThread(&refreashJniEnv, NULL);
 
     for(;;){
-        //__android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "before lock");
+        __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "before lock");
         pthread_mutex_lock(&refresh_mutex);
-        //__android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "after lock");
+        __android_log_print(ANDROID_LOG_VERBOSE, "refresh_thread", "after lock");
 
         if(is->abort_request){
             deleteLinkedQueue(refreshTimeQueue);
@@ -717,25 +732,37 @@ void* video_thread(void *arg)
     AVFrame *frame= av_frame_alloc();
 
     for(;;) {
+        __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "start");
+
+        __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "video_queue_mutex before lock");
+        //pthread_mutex_lock(&video_queue_mutex);
+        __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "video_queue_mutex after lock");
 
         if(is->abort_request){
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "is->abort_request");
+            //pthread_mutex_unlock(&video_queue_mutex);
             break;
         }
 
         if(is->paused ) {
+            __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "is->paused");
             usleep(1);
+            //pthread_mutex_unlock(&video_queue_mutex);
             continue;
         }
 
         pthread_mutex_lock(&video_queue_mutex);
 
+        __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get before");
         if (packet_queue_get(&is->videoq, pkt, 1) < 0){
 
+            pthread_mutex_unlock(&video_queue_mutex);
             __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get error");
             break;
         }else{
             __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get video_stream - pts: %f, count: %d", get_video_pts(pkt->dts, is), is->videoq.nb_packets);
         }
+        __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "packet_queue_get after");
 
         double pts;
         if(pkt->dts != AV_NOPTS_VALUE)
@@ -748,7 +775,6 @@ void* video_thread(void *arg)
 
             __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "end_pkt");
 
-            /*
             VideoPicture *vp;
             vp = &is->pictq[is->pictq_windex];
             vp->isEnd = true;
@@ -761,7 +787,6 @@ void* video_thread(void *arg)
             pthread_mutex_unlock(&is->pictq_mutex);
 
             pthread_mutex_unlock(&video_queue_mutex);
-             */
             continue;
         }
 
@@ -911,7 +936,7 @@ void* decode_thread(void* arge)
 {
     g_VM->AttachCurrentThread(&decodeJniEnv, NULL);
 
-    ANativeWindow* nativeWindow = is->nativeWindow;
+    ANativeWindow* nativeWindow = gNativeWindow;
     int frameFinished = 0;
     AVPacket packet;
 
@@ -920,7 +945,7 @@ void* decode_thread(void* arge)
 
     for(;;){
 
-        //__android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "start");
+        __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "start");
 
         if (is->abort_request) {
             __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->abort_request");
@@ -928,7 +953,7 @@ void* decode_thread(void* arge)
         }
 
         if (is->paused){
-            //__android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->paused");
+            __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->paused");
             continue;
         }
 
@@ -1032,7 +1057,7 @@ void* decode_thread(void* arge)
                 if (packet.stream_index == is->video_stream) {
 
                     packet_queue_put(&is->videoq, &packet);
-                    __android_log_print(ANDROID_LOG_DEBUG, "put", "packet_queue_put video_stream - pts: %f, count: %d", get_video_pts(packet.dts, is), is->videoq.nb_packets);
+                    __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "packet_queue_put video_stream - pts: %f, count: %d", get_video_pts(packet.dts, is), is->videoq.nb_packets);
 
                 }else if(packet.stream_index == is->audio_stream){
                     packet_queue_put(&is->audioq, &packet);
@@ -1046,7 +1071,7 @@ void* decode_thread(void* arge)
                 if(ret == AVERROR_EOF){
                     if (packet.stream_index == is->video_stream) {
                         end_read_frame = true;
-                        //packet_queue_put(&is->videoq, &end_pkt);
+                        packet_queue_put(&is->videoq, &end_pkt);
                         __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "av_read_frame AVERROR_EOF ");
                     }
                 }
@@ -1324,6 +1349,34 @@ void stream_seek_to(double seekPos) {
     }
 }
 
+void clearMovie(void)
+{
+    is->abort_request = 1;
+
+    pthread_join(refresh_tid, NULL);
+
+    /* close each stream */
+    if (is->audio_stream >= 0){
+        stream_component_close(is, is->audio_stream);
+    }
+
+    if (is->video_stream >= 0){
+        stream_component_close(is, is->video_stream);
+    }
+
+    if (is->ic) {
+        avformat_close_input(&is->ic);
+        is->ic = NULL; /* safety */
+    }
+
+    (*bqPlayerBufferQueue)->Clear(bqPlayerBufferQueue);
+
+    if (is) {
+        stream_close(is);
+        is = NULL;
+    }
+}
+
 void do_exit(void)
 {
     is->abort_request = 1;
@@ -1331,10 +1384,15 @@ void do_exit(void)
     pthread_join(refresh_tid, NULL);
 
     /* close each stream */
-    if (is->audio_stream >= 0)
+    if (is->audio_stream >= 0){
         stream_component_close(is, is->audio_stream);
-    if (is->video_stream >= 0)
+    }
+
+    if (is->video_stream >= 0){
         stream_component_close(is, is->video_stream);
+    }
+
+    closeAudio();
 
     if (is->ic) {
         avformat_close_input(&is->ic);
@@ -1383,8 +1441,6 @@ void stream_component_close(VideoState *is, int stream_index)
     switch(enc->codec_type) {
         case AVMEDIA_TYPE_AUDIO:
             packet_queue_abort(&is->audioq);
-
-            closeAudio();
 
             packet_queue_end(&is->audioq);
             break;

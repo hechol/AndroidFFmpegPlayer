@@ -333,6 +333,28 @@ public class PlayVideo extends Activity implements
         }
     }
 
+    public void movieEnd(){
+        clearMovie();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                openMovie(fileName);
+
+                duration = getDuration();
+                double coefficient = 100000000.0;
+                progressCoefficient = (duration / coefficient);
+
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        checkRatio();
+                    }
+                });
+            }
+        }).start();
+    }
+
     public void seekEnd(){
         isSeeking = false;
     }
@@ -351,6 +373,8 @@ public class PlayVideo extends Activity implements
     public static native double getCurrentPosition();
     public static native long getDuration();
     public static native void clickPause();
+
+    public static native void clearMovie();
 }
 
 

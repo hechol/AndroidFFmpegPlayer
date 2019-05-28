@@ -30,6 +30,7 @@ extern "C" {
     #include "libavformat/avformat.h"
     #include "libswscale/swscale.h"
     #include "libswresample/swresample.h"
+    #include "libavutil/avstring.h"
     #include "linkedqueue.h"
 }
 
@@ -65,8 +66,6 @@ typedef struct VideoState {
     int pictq_rindex;
     int pictq_windex;
     int pictq_size;
-
-    ANativeWindow* nativeWindow;
 
     pthread_t video_tid;
     pthread_t audio_tid;
@@ -110,6 +109,7 @@ int openMovie(const char filePath[]);
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();
+void clearMovie(void);
 void do_exit(void);
 void closePlayer();
 void stream_close(VideoState *is);
