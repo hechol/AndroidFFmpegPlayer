@@ -1,12 +1,12 @@
 # AndroidFFmpegPlayer
 
-video: android ANativeWindow
-
-sound: OpenSL
+ffmpeg library: ffmpeg-3.3.8 
 
 ndk build: Cmake
 
-ffmpeg library: ffmpeg-3.3.8 
+video: android ANativeWindow
+
+sound: OpenSL
 
 ==========================================================================
 
