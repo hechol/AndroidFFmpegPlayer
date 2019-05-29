@@ -846,7 +846,7 @@ void* video_thread(void *arg)
 
             __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "got_picture");
 
-            av_free_packet(pkt);
+            av_packet_unref(pkt);
         }
 
         pthread_mutex_unlock(&video_queue_mutex);
@@ -945,7 +945,7 @@ void* decode_thread(void* arge)
 
     for(;;){
 
-        __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "start");
+        //__android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "start");
 
         if (is->abort_request) {
             __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "is->abort_request");
@@ -1050,6 +1050,10 @@ void* decode_thread(void* arge)
         if(!end_read_frame)
         {
           //  __android_log_print(ANDROID_LOG_DEBUG, "decode_thread", "av_read_frame(is->ic, &packet)");
+
+              if(is->videoq.nb_packets > 2000){
+                  continue;
+              }
 
             int ret =  av_read_frame(is->ic, &packet);
 
