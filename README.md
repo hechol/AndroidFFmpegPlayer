@@ -40,6 +40,14 @@ https://blog.csdn.net/Glouds/article/details/50937266
 
 재생 완료 후 처음부터 다시 재생
 
+ - Key Functions and Features
+
+You can seek to any point using a progressive bar
+
+interval repeat playback function
+
+Playback again after finish of playback
+
 ===============================================================
 
  - 성능 관련 개선이 필요한 부분
