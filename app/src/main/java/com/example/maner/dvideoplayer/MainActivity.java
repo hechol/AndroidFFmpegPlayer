@@ -191,6 +191,7 @@ public class MainActivity extends AppCompatActivity {
             };
 
     public void mOnClick(View v) {
+        /*
         switch (v.getId()) {
             case R.id.btnroot:
                 if (mCurrent.compareTo(mRoot) != 0) {
@@ -207,6 +208,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 break;
         }
+        */
     }
 
     void refreshFiles() {

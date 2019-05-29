@@ -13,22 +13,6 @@
             android:layout_height="wrap_content"
             android:text="current"
             />
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" >
-            <Button
-                android:id="@+id/btnroot"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="mOnClick"
-                android:text="Root" />
-            <Button
-                android:id="@+id/btnup"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:onClick="mOnClick"
-                android:text="Up" />
-        </LinearLayout>
     </LinearLayout>
     <ListView
         android:id="@+id/filelist"
