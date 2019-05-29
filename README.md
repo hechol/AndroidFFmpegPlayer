@@ -6,8 +6,7 @@ sound: OpenSL
 
 ndk build: Cmake
 
-
-ffmpeg library는 ffmpeg-3.3.8버전을 linux환경에서 build했습니다. 
+ffmpeg library: ffmpeg-3.3.8 
 
 개발에 가장 많이 참고했던 코드는 http://dranger.com/ffmpeg/ 의 tutorial과 ffmpeg-0.5.15의 ffplay.c 코드 입니다.
 
