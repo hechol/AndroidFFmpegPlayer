@@ -36,7 +36,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_example_maner_dvideoplayer_PlayVid
     return env->NewStringUTF(hello.c_str());
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_initBasicPlayer(JNIEnv *env, jobject thiz, jobject playerCall)
+extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_initBasicPlayer(JNIEnv *env, jobject thiz)
 {
     /*
     if (android_getCpuFamily() == ANDROID_CPU_FAMILY_ARM && (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON) != 0) {
@@ -48,28 +48,9 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
         return -1;
         */
 
-    javaObject_PlayCallback = playerCall;
-    makeGlobalRef(env, &javaObject_PlayCallback);
-
-    javaClass_PlayCallback = env->FindClass("com/example/maner/dvideoplayer/PlayerCallback");
-    makeGlobalRef(env, (jobject*)&javaClass_PlayCallback);
-
-    javaMethod_updateClock = env->GetMethodID(javaClass_PlayCallback, "updateClock", "(D)V");
-    javaMethod_seekEnd = env->GetMethodID(javaClass_PlayCallback, "seekEnd", "()V");
-    javaMethod_movieEnd = env->GetMethodID(javaClass_PlayCallback, "movieEnd", "()V");
-
     av_register_all();
     createEngine();
-
-    JNIEnv *g_env = env;
-    env->GetJavaVM(&g_VM);
     return 0;
-}
-
-extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_setWindow(JNIEnv *env, jobject thiz, jobject surface)
-{
-    ANativeWindow* nativeWindow = ANativeWindow_fromSurface(env, surface);
-    setWindow(nativeWindow);
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_openMovie(JNIEnv *env, jobject thiz, jstring filePath)
@@ -83,6 +64,35 @@ extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_
 
     env->ReleaseStringUTFChars(filePath, str);
 
+    return result;
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_initJni(JNIEnv *env, jobject thiz, jobject playerCall)
+{
+    javaObject_PlayCallback = playerCall;
+    makeGlobalRef(env, &javaObject_PlayCallback);
+
+    javaClass_PlayCallback = env->FindClass("com/example/maner/dvideoplayer/PlayerCallback");
+    makeGlobalRef(env, (jobject*)&javaClass_PlayCallback);
+
+    javaMethod_updateClock = env->GetMethodID(javaClass_PlayCallback, "updateClock", "(D)V");
+    javaMethod_seekEnd = env->GetMethodID(javaClass_PlayCallback, "seekEnd", "()V");
+    javaMethod_movieEnd = env->GetMethodID(javaClass_PlayCallback, "movieEnd", "()V");
+
+    env->GetJavaVM(&g_VM);
+    return 0;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_setWindow(JNIEnv *env, jobject thiz, jobject surface)
+{
+    ANativeWindow* nativeWindow = ANativeWindow_fromSurface(env, surface);
+    setWindow(nativeWindow);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_example_maner_dvideoplayer_PlayVideo_startMovie(JNIEnv *env, jobject thiz)
+{
+    int result;
+    result = startMovie();
     return result;
 }
 

@@ -100,31 +100,26 @@ public class PlayVideo extends Activity implements
     @Override
     public void surfaceCreated(final SurfaceHolder surfaceHolderaa) {
 
-
         if(isNotCreated) {
             isNotCreated = false;
 
+            initBasicPlayer();
+            initJni(mPlayerCallback);
+            int openResult = openMovie(fileName);
+            setWindow(surfaceHolderaa.getSurface());
+            startMovie();
 
-            new Thread(new Runnable() {
+            duration = getDuration();
+            double coefficient = 100000000.0;
+            progressCoefficient = (duration / coefficient);
+
+            mHandler.post(new Runnable() {
                 @Override
                 public void run() {
-
-                    initBasicPlayer(mPlayerCallback);
-                    setWindow(surfaceHolderaa.getSurface());
-                    int openResult = openMovie(fileName);
-
-                    duration = getDuration();
-                    double coefficient = 100000000.0;
-                    progressCoefficient = (duration / coefficient);
-
-                    mHandler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            checkRatio();
-                        }
-                    });
+                    checkRatio();
                 }
-            }).start();
+            });
+
         }else{
             mHandler.post(new Runnable() {
                 @Override
@@ -336,32 +331,27 @@ public class PlayVideo extends Activity implements
     public void movieEnd(){
         clearMovie();
 
-        new Thread(new Runnable() {
+        openMovie(fileName);
+        startMovie();
+
+        mHandler.post(new Runnable() {
             @Override
             public void run() {
-                openMovie(fileName);
-
-                duration = getDuration();
-                double coefficient = 100000000.0;
-                progressCoefficient = (duration / coefficient);
-
-                mHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        checkRatio();
-                    }
-                });
+                checkRatio();
             }
-        }).start();
+        });
     }
 
     public void seekEnd(){
         isSeeking = false;
     }
 
-    public static native int initBasicPlayer(Object playerCall);
-    public static native void setWindow(Object surface);
+    public static native int initBasicPlayer();
+    public static native int initJni(Object playerCall);
     public static native int openMovie(String filePath);
+    public static native void setWindow(Object surface);
+    public static native int startMovie();
+
     public static native int getMovieWidth();
     public static native int getMovieHeight();
     public static native void close();

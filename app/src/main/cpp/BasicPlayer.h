@@ -106,6 +106,7 @@ void* video_thread(void *arg);
 void* refresh_thread(void *arg);
 
 int openMovie(const char filePath[]);
+int startMovie();
 void copyPixels(uint8_t *pixels);
 int getWidth();
 int getHeight();

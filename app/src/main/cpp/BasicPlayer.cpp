@@ -339,8 +339,17 @@ char gFilePath[1024];
 
 int openMovie(const char filePath[])
 {
-    int size = sizeof(gFilePath);
-    av_strlcpy(gFilePath, filePath, size);
+    AVFormatContext *ic = avformat_alloc_context();
+
+    if (avformat_open_input(&ic, filePath, NULL, NULL) != 0){
+        avformat_close_input(&ic);
+        return -2;
+    }
+
+    if (avformat_find_stream_info(ic, 0) < 0){
+        avformat_close_input(&ic);
+        return -3;
+    }
 
     is = (VideoState*)av_mallocz(sizeof(VideoState));
 
@@ -360,20 +369,14 @@ int openMovie(const char filePath[])
         is->pictq[i].isEnd = false;
     }
 
-    AVFormatContext *ic = avformat_alloc_context();
     is->ic = ic;
 
+    return 0;
+}
+
+int startMovie()
+{
     int video_index, audio_index;
-
-    //avformat_open_input(NULL, NULL, NULL, NULL);
-
-    if (avformat_open_input(&is->ic, filePath, NULL, NULL) != 0){
-        return -2;
-    }
-
-    if (avformat_find_stream_info(is->ic, 0) < 0){
-        return -3;
-    }
 
     int i;
     for (i = 0; i < is->ic->nb_streams; i++) {
