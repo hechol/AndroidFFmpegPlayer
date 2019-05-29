@@ -18,16 +18,16 @@ http://gamdekong.tistory.com/106
 
 http://blog.naver.com/PostView.nhn?blogId=just4u78&logNo=220628698165&categoryNo=0&parentCategoryNo=0&viewDate=&currentPage=1&postListTopCurrentPage=1&from=postView
 
-
 OpenSL 관련 code는 이곳을 참고했습니다.
 
 https://github.com/googlesamples/android-ndk/tree/master/native-audio
 https://blog.csdn.net/Glouds/article/details/50944309 
 
-
 android ANativeWindow 관련 code는 이곳을 참고했습니다.
 
 https://blog.csdn.net/Glouds/article/details/50937266
+
+빌드된 apk 파일은 build 폴더에 있습니다.
 
 ==========================================================
 
