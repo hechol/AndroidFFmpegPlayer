@@ -27,7 +27,7 @@ android ANativeWindow 관련 code는 이곳을 참고했습니다.
 
 https://blog.csdn.net/Glouds/article/details/50937266
 
-빌드된 apk 파일은 build 폴더에 있습니다.
+빌드된 apk파일은 build폴더에 있습니다.
 
 ==========================================================
 
