@@ -8,6 +8,28 @@ video: android ANativeWindow
 
 sound: OpenSL
 
+================================================================
+
+ - 주요 기능 및 특징
+
+프로그래시브 바를 이용해서 임의의 지점으로 seek 가능
+
+특정 구간 반복 기능 
+
+재생 완료 후 처음부터 다시 재생
+
+ - Key Functions and Features
+
+You can seek to any point using a progressive bar
+
+interval repeat playback function
+
+Playback again after finish of playback
+
+================================================================
+
+빌드된 apk파일은 build폴더에 있습니다.
+
 ==========================================================================
 
 개발에 가장 많이 참고했던 코드는 http://dranger.com/ffmpeg/ 의 tutorial과 ffmpeg-0.5.15의 ffplay.c 코드 입니다.
@@ -28,28 +50,6 @@ https://blog.csdn.net/Glouds/article/details/50944309
 android ANativeWindow 관련 code는 이곳을 참고했습니다.
 
 https://blog.csdn.net/Glouds/article/details/50937266
-
-================================================================
-
-빌드된 apk파일은 build폴더에 있습니다.
-
-================================================================
-
- - 주요 기능 및 특징
-
-프로그래시브 바를 이용해서 임의의 지점으로 seek 가능
-
-특정 구간 반복 기능 
-
-재생 완료 후 처음부터 다시 재생
-
- - Key Functions and Features
-
-You can seek to any point using a progressive bar
-
-interval repeat playback function
-
-Playback again after finish of playback
 
 ===============================================================
 
