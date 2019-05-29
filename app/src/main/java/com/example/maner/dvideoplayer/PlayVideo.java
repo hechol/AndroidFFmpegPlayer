@@ -103,9 +103,7 @@ public class PlayVideo extends Activity implements
         if(isNotCreated) {
             isNotCreated = false;
 
-            initBasicPlayer();
             initJni(mPlayerCallback);
-            int openResult = openMovie(fileName);
             setWindow(surfaceHolderaa.getSurface());
             startMovie();
 
@@ -346,7 +344,6 @@ public class PlayVideo extends Activity implements
         isSeeking = false;
     }
 
-    public static native int initBasicPlayer();
     public static native int initJni(Object playerCall);
     public static native int openMovie(String filePath);
     public static native void setWindow(Object surface);

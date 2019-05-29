@@ -343,12 +343,16 @@ int openMovie(const char filePath[])
 
     if (avformat_open_input(&ic, filePath, NULL, NULL) != 0){
         avformat_close_input(&ic);
-        return -2;
+        return -1;
     }
 
     if (avformat_find_stream_info(ic, 0) < 0){
         avformat_close_input(&ic);
-        return -3;
+        return -2;
+    }
+
+    if(ic->duration < 0){
+        return - 3;
     }
 
     is = (VideoState*)av_mallocz(sizeof(VideoState));

@@ -30,6 +30,10 @@ public class MainActivity extends AppCompatActivity {
 
     List<String> permissions;
 
+    static {
+        System.loadLibrary("native-lib");
+    }
+
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -48,6 +52,8 @@ public class MainActivity extends AppCompatActivity {
                 android.R.layout.simple_list_item_1, arFiles);
         mFileList.setAdapter(mAdapter);
         mFileList.setOnItemClickListener(mItemClickListener);
+
+        initBasicPlayer();
 
         checkPermissions();
     }
@@ -165,11 +171,21 @@ public class MainActivity extends AppCompatActivity {
                         mCurrent = Path;
                         refreshFiles();
                     } else {
+
+                        int openResult = openMovie(Path);
                         //Toast.makeText(this, arFiles.get(position),
                         //        Toast.LENGTH_SHORT).show();
-                        Intent tempIntent = new Intent(getApplicationContext(), PlayVideo.class);
-                        tempIntent.putExtra("file_name", Path);
-                        startActivity(tempIntent);
+                        if(openResult == 0) {
+                            Intent tempIntent = new Intent(getApplicationContext(), PlayVideo.class);
+                            tempIntent.putExtra("file_name", Path);
+                            startActivity(tempIntent);
+                        }else{
+                            new AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("dplayer")
+                                    .setMessage("can't play this file")
+                                    .setPositiveButton("ok", null)
+                                    .show();
+                        }
                     }
                 }
             };
@@ -237,6 +253,8 @@ public class MainActivity extends AppCompatActivity {
         mAdapter.notifyDataSetChanged();
     }
 
+    public static native int initBasicPlayer();
+    public static native int openMovie(String filePath);
 
 }
 
