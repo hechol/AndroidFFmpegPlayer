@@ -834,7 +834,8 @@ void* video_thread(void *arg)
         }
 
         if(ret == AVERROR(EINVAL)){
-
+            av_packet_unref(pkt);
+            continue;
         }
 
         if(ret >= 0){
