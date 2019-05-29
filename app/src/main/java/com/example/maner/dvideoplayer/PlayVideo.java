@@ -222,7 +222,6 @@ public class PlayVideo extends Activity implements
 
     @Override
     public void onBackPressed() {
-        super.onBackPressed();
         close();
     }
 

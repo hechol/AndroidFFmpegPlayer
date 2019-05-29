@@ -253,6 +253,18 @@ public class MainActivity extends AppCompatActivity {
         mAdapter.notifyDataSetChanged();
     }
 
+    @Override
+    public void onBackPressed() {
+        if (mCurrent.compareTo(mRoot) == 0) {
+            onBackPressed();
+        }else{
+            int end = mCurrent.lastIndexOf("/");
+            String uppath = mCurrent.substring(0, end);
+            mCurrent = uppath;
+            refreshFiles();
+        }
+    }
+
     public static native int initBasicPlayer();
     public static native int openMovie(String filePath);
 
