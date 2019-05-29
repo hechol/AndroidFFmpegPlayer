@@ -154,18 +154,11 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
 
     pthread_mutex_lock(&q->mutex);
 
-    /* duplicate the packet */
-    AVPacket copy = { 0 };
-    if (pkt!=&flush_pkt && av_packet_ref(&copy, pkt) < 0)
-        return -1;
-
     pkt1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
     if (!pkt1)
         return -1;
     pkt1->pkt = *pkt;
     pkt1->next = NULL;
-
-
 
     if (!q->last_pkt)
 
@@ -829,6 +822,7 @@ void* video_thread(void *arg)
         if(test_skip_frame(pts, is)){
             skip_frame_count++;
             pthread_mutex_unlock(&video_queue_mutex);
+            av_packet_unref(pkt);
             continue;
         }
 
@@ -841,11 +835,8 @@ void* video_thread(void *arg)
         }
 
         if (got_picture) {
-
             queue_picture(frame, pts);
-
             __android_log_print(ANDROID_LOG_DEBUG, "video_thread", "got_picture");
-
             av_packet_unref(pkt);
         }
 
@@ -1202,9 +1193,7 @@ void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context){
                 // which for this code example would indicate a programming error
                 (void) result;
 
-                av_free_packet(&audioPacket);
-
-
+                av_packet_unref(&audioPacket);
             }
             return;
         }
