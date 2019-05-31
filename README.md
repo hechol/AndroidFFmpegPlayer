@@ -1,5 +1,9 @@
 # AndroidFFmpegPlayer
 
+builded with Android Studio 3.3.2
+
+===============================================================
+
 ffmpeg library: ffmpeg-3.3.8 
 
 ndk build: Cmake
