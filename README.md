@@ -1,19 +1,19 @@
 # AndroidFFmpegPlayer
 
-!builded
-@builded
-#builded
-$builded
-%builded
-^builded
-&builded
-*builded
-+builded
-\builded
-/builded
-|builded
-?builded
-=builded
+! builded
+@ builded
+# builded
+$ builded
+% builded
+^ builded
+& builded
+* builded
++ builded
+\ builded
+/ builded
+| builded
+? builded
+= builded
 
 
 
