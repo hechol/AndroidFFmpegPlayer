@@ -1,22 +1,5 @@
 # AndroidFFmpegPlayer
 
-! builded
-@ builded
-# builded
-$ builded
-% builded
-^ builded
-& builded
-* builded
-+ builded
-\ builded
-/ builded
-| builded
-? builded
-= builded
-
-
-
 builded with Android Studio 3.3.2
 
 ===============================================================
