@@ -39,19 +39,17 @@ https://blog.csdn.net/Glouds/article/details/50937266
 
 ================================================================
 
-## 주요 기능 및 특징
+## 주요 기능 및 특징 (Key Functions and Features)
 
 프로그래시브 바를 이용해서 임의의 지점으로 seek 가능
 
-특정 구간 반복 기능 
-
-재생 완료 후 처음부터 다시 재생
-
- - Key Functions and Features
-
 You can seek to any point using a progressive bar
 
+특정 구간 반복 기능 
+
 interval repeat playback function
+
+재생 완료 후 처음부터 다시 재생
 
 Playback again after finish of playback
 
