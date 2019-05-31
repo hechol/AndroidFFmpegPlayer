@@ -822,6 +822,7 @@ void* video_thread(void *arg)
         }
 
         if(ret == AVERROR(EINVAL)){
+            pthread_mutex_unlock(&video_queue_mutex);
             av_packet_unref(pkt);
             continue;
         }
