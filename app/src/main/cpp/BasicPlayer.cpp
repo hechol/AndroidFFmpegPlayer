@@ -870,16 +870,11 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
             packet_queue_init(&is->videoq);
 
-            ///gFrame = avcodec_alloc_frame();
-            //if (gFrame == NULL)
-            //    return -7;
-
             gFrameRGB = av_frame_alloc();
             if (gFrameRGB == NULL)
                 return -8;
 
             // video init
-
             gPictureSize = avpicture_get_size(AV_PIX_FMT_RGBA, enc->width, enc->height);
             gVideoBuffer = (uint8_t*)(malloc(sizeof(uint8_t) * gPictureSize));
             avpicture_fill((AVPicture*)gFrameRGB, gVideoBuffer, AV_PIX_FMT_RGBA, enc->width, enc->height);
@@ -910,9 +905,6 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
             audioFrame = av_frame_alloc();
 
             createBufferQueueAudioPlayer(rate, channel, SL_PCMSAMPLEFORMAT_FIXED_16);
-
-            //pthread_create(&is->audio_tid, NULL, audio_thread, NULL);
-            //tbqPlayerCallback(bqPlayerBufferQueue, NULL);
             break;
     }
     return 0;
@@ -955,8 +947,7 @@ void* decode_thread(void* arge)
                 __android_log_print(ANDROID_LOG_VERBOSE, "auto_repeat", "getAutoRepeatStartPts: %f", getAutoRepeatStartPts());
                 stream_seek(-gap);
             }else{
-                //int a = getAutoRepeatEndPts();
-                //int b = get_master_clock(is);
+
             }
         }else if(autoRepeatState == auto_repeat_on_working){
             if((getAutoRepeatEndPts() - get_master_clock(is)) > 0){
