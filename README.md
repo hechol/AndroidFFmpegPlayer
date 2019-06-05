@@ -1,6 +1,6 @@
 # AndroidFFmpegPlayer
 
-builded with Android Studio 3.3.2
+builded with Android Studio 3.4.1
 
 ===============================================================
 
