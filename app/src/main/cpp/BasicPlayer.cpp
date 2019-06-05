@@ -491,13 +491,13 @@ bool test_skip_frame(double frame_current_pts, VideoState *is)
 
     //__android_log_print(ANDROID_LOG_VERBOSE, "CHK", "actual_delay: %f", actual_delay);
     if(delay <= 0){
-        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return false;
     }else if (actual_delay < 0.0) {
-        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame yes: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame yes: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return true;
     }else{
-       __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, last_pts:%f", frame_current_pts, is->frame_skip_last_pts);
+       __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return false;
     }
 }
