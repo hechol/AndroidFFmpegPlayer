@@ -55,8 +55,6 @@ Playback again after finish of playback
 
 ## 성능 관련 개선이 필요한 부분
 
-ffmpeg 라이브러리 빌드를 할때 디버깅을 위한 셋팅으로 빌드 했던걸로 기억합니다. 
-
 https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 적용하면 더 높은 프레임이 나올 것입니다.
 
 프레임 스킵 기능이 적용되어 있긴 한데 디코딩 이후의 과정(avcodec_receive_frame 이후의 부분)만 스킵이 됩니다.  
