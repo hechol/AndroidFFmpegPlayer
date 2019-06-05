@@ -55,8 +55,6 @@ Playback again after finish of playback
 
 ## 성능 관련 개선이 필요한 부분
 
-https://d2.naver.com/helloworld/8794 에 소개된 shader를 사용한 최적화를 적용하면 더 높은 프레임이 나올 것입니다.
-
 프레임 스킵 기능이 적용되어 있긴 한데 디코딩 이후의 과정(avcodec_receive_frame 이후의 부분)만 스킵이 됩니다.  
 현재 디코딩속도가 재생속도보다 낮게 나오는 경우 사운드만 재생되고 화면은 멈춰있는 현상이 발생합니다. 
 
