@@ -18,7 +18,7 @@ sound: OpenSL
 
 ffmpeg library build는 이곳을 참고했습니다.
 
-http://dev2.prompt.co.kr/77
+https://medium.com/@karthikcodes1999/cross-compiling-ffmpeg-4-0-for-android-b988326f16f2
 
 http://gamdekong.tistory.com/106
 
