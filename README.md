@@ -4,13 +4,17 @@ builded with Android Studio 3.4.1
 
 ===============================================================
 
-ffmpeg library: ffmpeg-3.3.9 
+ffmpeg library: ffmpeg-3.3.9
 
 ndk build: Cmake
 
 video: android ANativeWindow
 
 sound: OpenSL
+
+ffmpeg build script
+armeabi-v7a : https://github.com/hechol/AndroidFFmpegPlayer/blob/master/app/src/main/cpp/ffmpeg/armeabi-v7a/config_android_arm.sh
+arm64-v8a : https://github.com/hechol/AndroidFFmpegPlayer/blob/master/app/src/main/cpp/ffmpeg/arm64-v8a/config_android_arm64.sh
 
 ================================================================
 
