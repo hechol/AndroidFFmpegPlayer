@@ -12,6 +12,8 @@ video: android ANativeWindow
 
 sound: OpenSL
 
+===============================================================
+
 ffmpeg build script
 
 armeabi-v7a : https://github.com/hechol/AndroidFFmpegPlayer/blob/master/app/src/main/cpp/ffmpeg/armeabi-v7a/config_android_arm.sh
