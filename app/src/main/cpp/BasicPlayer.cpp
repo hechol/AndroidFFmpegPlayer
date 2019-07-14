@@ -82,6 +82,9 @@ double autoRepeatEndPts= 10;
 int autoRepeatState = 0;
 
 bool end_read_frame = false;
+int skip_frame_count = 0;
+int skip_level = 0;
+AVCodecContext *videoCodecContext;
 
 void* audio_thread(void *arg)
 {
@@ -366,6 +369,8 @@ int openMovie(const char filePath[])
     is->pictq_size = 0;
 
     end_read_frame = false;
+    skip_level = 0;
+    skip_frame_count = 0;
 
     for(int i = 0; i < VIDEO_PICTURE_QUEUE_SIZE; i++){
         is->pictq[i].isEnd = false;
@@ -491,13 +496,13 @@ bool test_skip_frame(double frame_current_pts, VideoState *is)
 
     //__android_log_print(ANDROID_LOG_VERBOSE, "CHK", "actual_delay: %f", actual_delay);
     if(delay <= 0){
-        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
+        //__android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return false;
     }else if (actual_delay < 0.0) {
-        __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame yes: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
+        //__android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame yes: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return true;
     }else{
-       __android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
+       //__android_log_print(ANDROID_LOG_DEBUG, "test_skip_frame", "skip_frame no: pts:%f, actual_delay:%f", frame_current_pts, actual_delay);
         return false;
     }
 }
@@ -639,7 +644,6 @@ void* refresh_thread(void *arg)
 }
 
 int frameTest = 10;
-int skip_frame_count = 0;
 
 int queue_picture(AVFrame *src_frame, double pts) {
 
@@ -803,11 +807,6 @@ void* video_thread(void *arg)
             continue;
         }
 
-        if(skip_frame_count > 0){
-            skip_frame_count--;
-            //continue;
-        }
-
         int ret = 0;
 
         //avcodec_decode_video2(is->video_st->codec, frame, &got_picture, pkt);
@@ -818,7 +817,31 @@ void* video_thread(void *arg)
             skip_frame_count++;
             pthread_mutex_unlock(&video_queue_mutex);
             av_packet_unref(pkt);
-            continue;
+
+            __android_log_print(ANDROID_LOG_DEBUG, "skip_frame", "frame skip");
+
+            if(skip_level < 2){
+                if(skip_frame_count > 90){
+                    skip_frame_count = 0;
+                    skip_level++;
+
+                    __android_log_print(ANDROID_LOG_DEBUG, "skip_frame", "skip_frame : %d", videoCodecContext->skip_frame);
+
+                    if(skip_level == 1){
+                        videoCodecContext->skip_frame = AVDISCARD_BIDIR;
+                        __android_log_print(ANDROID_LOG_DEBUG, "skip_frame", "skip_frame = AVDISCARD_BIDIR");
+                    }else if(skip_level == 2){
+                        videoCodecContext->skip_frame = AVDISCARD_NONKEY;
+                        __android_log_print(ANDROID_LOG_DEBUG, "skip_frame", "skip_frame = AVDISCARD_NONKEY");
+                    }
+                }
+            }
+
+            if(skip_frame_count > 10){
+                continue;
+            }
+        }else{
+            skip_frame_count = 0;
         }
 
         if(ret == AVERROR(EINVAL)){
@@ -860,6 +883,8 @@ int stream_component_open(VideoState *is, int stream_index, ANativeWindow* nativ
 
     switch(enc->codec_type) {
         case AVMEDIA_TYPE_VIDEO:
+            videoCodecContext = enc;
+
             is->frame_last_delay = 40e-3;
             is->frame_timer = (double)av_gettime() / 1000000.0;
             is->frame_skip_timer = (double)av_gettime() / 1000000.0;
@@ -1015,6 +1040,10 @@ void* decode_thread(void* arge)
 
             pthread_mutex_unlock(&refresh_mutex);
             pthread_mutex_unlock(&video_queue_mutex);
+
+            skip_level = 0;
+            skip_frame_count = 0;
+            videoCodecContext->skip_frame = AVDISCARD_DEFAULT;
 
             schedule_refresh(1);
 
